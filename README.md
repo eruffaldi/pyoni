@@ -1,2 +1,17 @@
 # pyoni
 Pure python tool for manipulating OpenNI recorded files (oni). This tool supports extraction of data, time rescaling and fix of broken files.
+
+Build
+=======================
+
+Use CMake or a simple (gcc --shared xn16zdec.cpp)
+
+
+References
+=======================
+
+https://github.com/OpenNI/OpenNI2/blob/master/Source/Drivers/OniFile/DataRecords.cpp
+https://github.com/OpenNI/OpenNI2/blob/master/Source/Core/OniRecorder.cpp
+https://github.com/OpenNI/OpenNI2/blob/master/Source/Core/OniDataRecords.cpp
+CODECS: https://github.com/OpenNI/OpenNI2/blob/5b88c95e4f8d19b95713e3c873c7d07e48e5605b/Source/Drivers/OniFile/Formats/Xn16zEmbTablesCodec.h
+https://github.com/OpenNI/OpenNI2/blob/5b88c95e4f8d19b95713e3c873c7d07e48e5605b/Source/Drivers/OniFile/Formats/XnStreamCompression.cpp
