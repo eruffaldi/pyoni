@@ -19,6 +19,7 @@
 import struct#
 import onifile as oni
 import shutil
+from collections import defaultdict
 
 if __name__ == "__main__":
     import sys,os,argparse
@@ -188,6 +189,7 @@ if __name__ == "__main__":
         a.close()
         b.close()        
     elif action == "rescale":
+        stats = dict()
         while True:
                 h = oni.readrechead(a)
                 if h is None:
@@ -195,13 +197,32 @@ if __name__ == "__main__":
                 if h["rt"] == oni.RECORD_NEW_DATA:
                     t = oni.parsedata(a,h)["timestamp"]
                     t2 = int(t*args.rescale)
-                    print h["nid"],t,t2
+                    #print h["nid"],t,t2
+                    q = stats.get(h["nid"],None)
+                    if q is None:
+                        print "new for",h["nid"],"in new data"
+                        q = [t2,t2,None,None]
+                        stats[h["nid"]] = q
+                    else:
+                        if q[0] is None:
+                            q[0] = t2
+                            q[1] = t2
+                        else:
+                            if q[0] < t2:
+                                q[0] = t2;
+                            if q[1] > t2:
+                                q[1] = t2
                     oni.patchtime(a,h,t2)
                 elif h["rt"] == oni.RECORD_NODE_ADDED:
                     hh = oni.parseadded(a,h)
-                    hh["maxts"] = int(hh["maxts"]*args.rescale)
-                    hh["mints"] = int(hh["mints"]*args.rescale)
-                    oni.patchadded(a,h,hh)
+                    q = stats.get(h["nid"],None)
+                    if q is None:
+                        print "new for",h["nid"],"in added"
+                        q = [None,None,h,hh]
+                        stats[h["nid"]] = q
+                    else:
+                        q[2] = h
+                        q[3] = hh
                 elif h["rt"] == oni.RECORD_SEEK_TABLE:
                     x = oni.parseseek(a,h)
                     n = len(x["data"])
@@ -211,7 +232,17 @@ if __name__ == "__main__":
                     oni.writeseek(a,h) 
                     
                 # next record
-                a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)        
+                a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)      
+        for k,v in stats.iteritems():
+            print "v is",v
+            hh = v[3]
+            h = v[2]
+            hh["maxts"] = v[0]
+            hh["mints"] = v[1]
+            if v[0] is None:
+                continue
+            print "patching",a,h["nid"],hh    
+            oni.patchadded(a,h,hh)                         
     elif action == "fixcut" or action == "checkcut":
         while True:
                 h = oni.readrechead(a)
