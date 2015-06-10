@@ -23,6 +23,26 @@ import onifile as oni
 import shutil
 from collections import defaultdict
 
+class StreamInfo:
+    def __init__(self):
+        self.frame = 0
+        self.newframe = 0
+        self.maxts = None
+        self.mints = None
+        self.basetime = None
+        self.headerblock = None
+        self.headerdata = None
+        self.framesoffset = []
+    def newtime(self,t):
+        if self.maxts is None:
+            self.maxts = t
+            self.mints = t
+        else:
+            if t > self.maxts:
+                self.maxts = t
+            if t < self.mints:
+                self.mints = t
+
 def interval(s,t,tt):
     try:
         x, y = map(tt, s.split(','))
@@ -45,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")
     parser.add_argument('--dump',action="store_true")
+    parser.add_argument('--dupframes',action="store_true")
     #parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
     #parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"time",int))
     parser.add_argument('--output')
@@ -147,6 +168,13 @@ if __name__ == "__main__":
             sys.exit(-1)
         action = "info"
 
+    if args.dupframes:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        patchaction = True
+        action = "dupframes"
+
     filesize = os.stat(args.file).st_size
     if patchaction:
         shutil.copyfile(args.file,args.output)
@@ -235,25 +263,6 @@ if __name__ == "__main__":
         a.close()
         b.close()
     elif action == "cutbyframe" or action == "cutbytime":
-        class StreamInfo:
-            def __init__(self):
-                self.frame = 0
-                self.newframe = 0
-                self.maxts = None
-                self.mints = None
-                self.basetime = None
-                self.headerblock = None
-                self.headerdata = None
-                self.framesoffset = []
-            def newtime(self,t):
-                if self.maxts is None:
-                    self.maxts = t
-                    self.mints = t
-                else:
-                    if t > self.maxts:
-                        self.maxts = t
-                    if t < self.mints:
-                        self.mints = t
 
         stats = defaultdict(StreamInfo)
         while True:
@@ -370,6 +379,26 @@ if __name__ == "__main__":
             oni.patchadded(a,h,hh)    
         h0["ts"] = max([x[3]["maxts"] for x in stats.values()])
         oni.writehead1(a,h0)                     
+    elif action == "dupframes":
+        while True:
+                h = oni.readrechead(a)
+                if h is None:
+                        break
+                prelast = last
+                last = h
+                if h["nid"] > mid:
+                        mid = h["nid"]
+                elif h["rt"] == oni.RECORD_SEEK_TABLE:
+                    x = oni.parseseek(a,h)
+                    y = []
+                    # duplicate here....                    
+                    h["data"] = x
+                    oni.writeseek(a,h) 
+                    break
+                # next record
+                a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)                
+        # now fix the maxts 
+        oni.writeend(a)
     elif action == "fixcut" or action == "checkcut":
         while True:
                 h = oni.readrechead(a)
