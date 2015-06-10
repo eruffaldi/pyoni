@@ -23,6 +23,14 @@ import onifile as oni
 import shutil
 from collections import defaultdict
 
+def interval(s,t,tt):
+    try:
+        x, y = map(tt, s.split(','))
+        return x, y
+    except:
+        raise argparse.ArgumentTypeError("%s must be x,y" % t)
+
+
 if __name__ == "__main__":
     import sys,os,argparse
 
@@ -34,8 +42,11 @@ if __name__ == "__main__":
     parser.add_argument('--fixcut',action="store_true",help="fixes cut file")
     parser.add_argument('--checkcut',action="store_true",help="checks if file was cut")
     parser.add_argument('--stripcolor',action="store_true")
+    parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")
     parser.add_argument('--dump',action="store_true")
+    #parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
+    #parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"time",int))
     parser.add_argument('--output')
 
     args = parser.parse_args()
@@ -66,7 +77,16 @@ if __name__ == "__main__":
             sys.exit(-1)
         action = "stripcolor"
 
-    if args.fixcut:
+    if args.stripir:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "stripir"
+
+    if args.fixcut :
         if action != "":
             print "Already specified action",action
             sys.exit(-1)
@@ -75,6 +95,26 @@ if __name__ == "__main__":
             sys.exit(-1)
         patchaction = True
         action = "fixcut"
+
+    if args.cutbyframe is not None:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        target = ("frame",args.cutbyframe)
+        action = "cutbyframe"
+
+    if args.cutbytime is not None:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
+        action = "cutbytime"
 
     if args.checkcut:
         if action != "":
@@ -160,9 +200,13 @@ if __name__ == "__main__":
         a.close()
         b.close()
 
-    elif action == "stripcolor":
+    elif action == "stripcolor" or action == "stripir":
         offdict = dict()
         # scan all and keep pre and last
+        if action == "stripcolor":
+            id = 1
+        else:
+            id = 2
         while True:
                 h = oni.readrechead(a)
                 if h is None:
@@ -171,7 +215,7 @@ if __name__ == "__main__":
                 last = h
                 if h["nid"] > mid:
                         mid = h["nid"]
-                if h["nid"] == 1:                
+                if h["nid"] == id:                
                     if h["rt"] == oni.RECORD_SEEK_TABLE: # skip
                         #st = loadseek(a,h)
                         print "seek loaded and skipped, needs update"
@@ -189,7 +233,81 @@ if __name__ == "__main__":
                     continue
                 a.seek(h["nextheader"],0)
         a.close()
-        b.close()        
+        b.close()
+    elif action == "cutbyframe" or action == "cutbytime":
+        class StreamInfo:
+            def __init__(self):
+                self.frame = 0
+                self.newframe = 0
+                self.maxts = None
+                self.mints = None
+                self.basetime = None
+                self.headerblock = None
+                self.headerdata = None
+                self.framesoffset = []
+            def newtime(self,t):
+                if self.maxts is None:
+                    self.maxts = t
+                    self.mints = t
+                else:
+                    if t > self.maxts:
+                        self.maxts = t
+                    if t < self.mints:
+                        self.mints = t
+
+        stats = defaultdict(StreamInfo)
+        while True:
+                h = oni.readrechead(a)
+                if h is None:
+                        break
+                if h["rt"] == oni.RECORD_NEW_DATA:
+                    t = oni.parsedata(a,h)["timestamp"]
+                    q = stats[h["nid"]]
+                    good = False
+                    if target[0] == "frame":
+                        good = q.frame >= target[1][0] and frame <= target[1][1]
+                    else:
+                        good = t >= target[1][0] and t <= target[1][1]
+                    if good:
+                        # retime
+                        if q.newframe == 0:
+                            q.basetime = t
+                        t2 = t-q.basetime
+                        q.newtime(t2)
+                        # store for seek table
+                        self.framesoffset.append((b.tell(),q.newframe))
+                        # append block
+
+                        # then next
+                        q.newframe += 1
+                    q.frame += 1
+                elif h["rt"] == oni.RECORD_NODE_ADDED:
+                    hh = oni.parseadded(a,h)
+                    q = stats[h["nid"]]
+                    self.headerblock = h
+                    self.headerdata = hh
+                    # append block
+                elif h["rt"] == oni.RECORD_SEEK_TABLE:
+                    # append new seektable
+                    pass
+                else:
+                    # append block
+                    pass
+
+                # next record
+                a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)      
+
+        # patch the stream blocks with maxts/mints and frames
+        for nid,q in stats.iteritems():
+            q.headerdata["maxts"] = q.maxts
+            q.headerdata["mints"] = q.mints
+            q.headerdata["frames"] = q.newframe
+            if q.mints is None:
+                continue
+            oni.patchadded(b,q.headerblock,q.headerdata)    
+        # patch header 0
+        h0["ts"] = max([q.maxts for x in stats.values()])
+        oni.writehead1(b,h0)                           
     elif action == "rescale":
         stats = dict()
         while True:
