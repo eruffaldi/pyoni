@@ -145,7 +145,7 @@ def parseseek(a,h):
         r.append(t)
     h["data"] = r
     return h
-def makestr(a,s):
+def makestr(s):
     return struct.pack("=i",len(s)+1)+ s+"\x00" 
 
 codec2id = dict(raw=XN_CODEC_UNCOMPRESSED,jpeg=XN_CODEC_JPEG)
@@ -155,7 +155,7 @@ codec2id["16zt"] = XN_CODEC_16Z_EMB_TABLES
 
 def patchadded(a,h,hh):
     a.seek(h["poffset"],0)
-    a.write(makestr(a,hh["name"]))
+    a.write(makestr(hh["name"]))
     #print "codecback",codec2id.get(hh["codec"],hh["codec"])
     ocodec = codec2id.get(hh["codec"],hh["codec"])
     a.write(struct.pack("=iiiqq",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"]))
@@ -190,11 +190,19 @@ def parseprop(a,h):
         data = struct.unpack("i",data)[0]    
     return dict(name=name,data=data)
 
-    
+def writeprop(a,h,z):
+    a.seek(h["poffset"],0)
+    if h["rt"] == RECORD_INT_PROPERTY:      
+        c = makestr(z["name"]) + struct.pack("=ii",4+4,z["data"])
+        a.write(c)
+    else:
+        print "prop type unsupported",h,z
+
 
 
 def writehead1(a,h):
     """writes a new header"""
+    a.seek(0)
     version = struct.pack("bbhi",*h["version"])
     ts = struct.pack("q",h["ts"])
     maxnodeid = struct.pack("i",h["maxnid"])

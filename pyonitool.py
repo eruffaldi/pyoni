@@ -14,6 +14,8 @@
 # - split/cut
 # - dump stats
 #
+# TODO: XN_STREAM_PROPERTY_S2D_TABLE
+#
 # Version 2015/06/09
 
 import struct#
@@ -213,6 +215,11 @@ if __name__ == "__main__":
                             if q[1] > t2:
                                 q[1] = t2
                     oni.patchtime(a,h,t2)
+                elif h["rt"] == oni.RECORD_INT_PROPERTY:
+                    z = oni.parseprop(a,h)
+                    if z["name"] == "IsFrameBased":
+                        z["data"] = 0
+                        oni.writeprop(a,h,z)
                 elif h["rt"] == oni.RECORD_NODE_ADDED:
                     hh = oni.parseadded(a,h)
                     q = stats.get(h["nid"],None)
@@ -242,7 +249,9 @@ if __name__ == "__main__":
             if v[0] is None:
                 continue
             print "patching",a,h["nid"],hh    
-            oni.patchadded(a,h,hh)                         
+            oni.patchadded(a,h,hh)    
+        h0["ts"] = max([x[3]["maxts"] for x in stats.values()])
+        oni.writehead1(a,h0)                     
     elif action == "fixcut" or action == "checkcut":
         while True:
                 h = oni.readrechead(a)
@@ -297,6 +306,7 @@ if __name__ == "__main__":
         nodetypes = {}
         nodetypes[2] = "depth"
         nodetypes[3] = "color"
+        print "fileheader",h0
         while True:
             h = oni.readrechead(a)
             pt = a.tell()
