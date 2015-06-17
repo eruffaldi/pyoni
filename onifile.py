@@ -1,4 +1,4 @@
-import struct
+import struct,sys
 
 RECORD_END = 0x0B
 HEADER_MAGIC_SIZE = 4
@@ -14,14 +14,19 @@ def XN_CODEC_ID(c1, c2, c3, c4):
     c4 = ord(c4)
     return ((c4 << 24) | (c3 << 16) | (c2 << 8) | c1)
 
-def parseindex(a):
+def parseindexentry(a):
+    """decodes the DataIndexEntry made of a timestamp, config and offset as dictionary"""
     ts = parseint64(a)
     cid = parseint(a)
     pos = parseint64(a)
     return dict(timestamp=ts,config=cid,offset=pos)
 
-def makeindex(a):
-    return struct.pack("=qiq",a["timestamp"],a["config"],a["offset"])
+def makeindexentry(a):
+    """encodes the DataIndexEntry made of a timestamp, config and offset"""
+    if type(a) == tuple:
+        return struct.pack("=qiq",a[0],a[1],a[2])
+    else:
+        return struct.pack("=qiq",a["timestamp"],a["config"],a["offset"])
 
 #BAD
 NODE_TYPE_DEVICE = 1
@@ -103,6 +108,16 @@ Version structure:
 #   timestamp 8
 #    Seek table position
 
+#struct RecordHeaderData
+#{
+#    XnUInt32 magic;
+#    XnUInt32 recordType;
+#    XnUInt32 nodeId;
+#    XnUInt32 fieldsSize;
+#    XnUInt32 payloadSize;
+#    XnUInt64 undoRecordPos;
+#};
+
 
 def parseint(a):
     return struct.unpack("i",a.read(4))[0]
@@ -113,11 +128,17 @@ def parseint64(a):
 def makeint64(a):
     return struct.pack("q",a)
 
-def parsedata(a,h):
+def parsedatahead(a,h):
+    """Parsed the header of the data block containing timestamp and seek table position
+    https://github.com/OpenNI/OpenNI2/blob/master/Source/Core/OniDataRecords.cpp"""
     a.seek(h["poffset"],0)
     ts =    parseint64(a)
-    seek  = parseint(a)
-    return dict(timestamp=ts,dataoffset=seek)
+    frameid  = parseint(a)
+    return dict(timestamp=ts,frameid=frameid)
+
+def writedatahead(a,h):
+    a.seek(h["poffset"],0)
+    a.write(struct.pack("=qi",h["timestamp"],h["frameid"]))
 
 def patchtime(a,h,ot):
     a.seek(h["poffset"],0)
@@ -129,7 +150,7 @@ def parsestr(a):
     return name
 
 def writeseek(a,h):
-    print "writing",len(h["data"])
+    print "writeseek",len(h["data"])
     a.seek(h["poffset"],0)
     for x in h["data"]:
         y = makeindex(x)
@@ -137,11 +158,12 @@ def writeseek(a,h):
 
 def parseseek(a,h):
     a.seek(h["poffset"],0)
+    print "seek",h["fs"]
     r = []
     n = h["ps"]/(8+8+4)
     print "reading seektable",n
     for i in range(0,n):
-        t = parseindex(a)
+        t = parseindexentry(a)
         r.append(t)
     h["data"] = r
     return h
@@ -158,6 +180,7 @@ def patchadded(a,h,hh):
     a.write(makestr(hh["name"]))
     #print "codecback",codec2id.get(hh["codec"],hh["codec"])
     ocodec = codec2id.get(hh["codec"],hh["codec"])
+    print h,hh
     a.write(struct.pack("=iiiqq",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"]))
 def parseadded(a,h):
     a.seek(h["poffset"],0)
@@ -225,22 +248,112 @@ def readhead1(a):
 def writeend(a):
     """writes the end record"""
     w = (MAGIC,0x0B,0,HEADER_SIZE,0)
-    h1 = struct.pack("5i",*w)
-    h2 = struct.pack("q",0)
-    a.write(h1+h2)
+    a.write(struct.pack("5i",*w)+struct.pack("q",0))
+
+def copyblock(a,h,b,frame=None,timestamp=None):
+    a.seek(h["poffset"],0)
+    hout = dict(rt=h["rt"],nid=h["nid"],fs=h["fs"],ps=h["ps"],undopos=h["undopos"],poffset=0,hoffset=b.tell(),nextheader=0)
+    writehead(b,hout)
+    if h["fs"] > 5*4+8:
+        if h["rt"] == RECORD_NEW_DATA and frame is not None:
+            # skip real time 
+            oldts =    parseint64(a)
+            oldframeid  = parseint(a)
+            # field or payload?
+            b.write(struct.pack("=qi",timestamp,frame))
+        else:
+            print "extra",h
+            b.write(a.read(h["fs"]-(5*4+8)))
+
+    n = 0
+    while n < h["ps"]:
+        no = h["ps"]-n
+        if no > 64*1024:
+            no = 64*1024
+        d = a.read(no)
+        b.write(d)
+        n += no
+    hout["poffset"] = b.tell()
+    hout["nextheader"] = hout["hoffset"] + hout["fs"] + hout["ps"]
+    return hout
 
 def writehead(a,h):
-    a.write(struct.pack("5i",MAGIC,h["rt"],h["nid"],h["fs"],h["ps"]) + struct.pack("q",h["h2"]))
+    a.write(struct.pack("5i",MAGIC,h["rt"],h["nid"],h["fs"],h["ps"]) + struct.pack("q",h["undopos"]))
 
 def readrechead(a):
-    """read record"""
+    """read record: the resulting dictionary contains:
+    - rt  = recordType
+    - nid = identifier/stream
+    - fs  = field size
+    - ps  = payload size
+    - poffset = offset to the content
+    - hoffset = offset to the header
+    - nextheader = next header
+    - h2 = undo record pos (one uint64)
+
+    The header stored is:
+    - magic (32bit) 0x0052494E
+    - rt
+    - nid
+    - fs = sizeof(*m_header)
+    - ps 
+    - undorecord
+    """
     p = a.tell()
-    h1 = a.read(4*5)
+    h1 = a.read(4*5+8)
     if h1 == "":
             return None
-    h2 = a.read(8)
-    magic,rt,nid,fs,ps= struct.unpack("5i",h1)
+    magic,rt,nid,fs,ps,undopos= struct.unpack("=5iq",h1)
     if magic != MAGIC:
             print "bad magic record",magic
-    r = dict(rt=rt,nid=nid,fs=fs,ps=ps,poffset=a.tell(),hoffset=p,nextheader=p+ps+fs,h2=struct.unpack("q",h2)[0])
+    r = dict(rt=rt,nid=nid,fs=fs,ps=ps,poffset=a.tell(),hoffset=p,nextheader=p+ps+fs,undopos=undopos)
     return r
+
+
+class StreamInfo:
+    """Class for transcoding"""
+    def __init__(self):
+        self.oldtimestamp = 0 # last old times
+        self.oldframes = 0 # original frame
+        self.oldbasetime = None # of old
+
+        self.newtimestamp = 0 # last new times
+        self.newframes = 0 # current writing frame
+        self.maxts = None # of new frame
+        self.mints = None # of new frame
+        self.configid = 0
+
+        self.headerblock = None # ??
+        self.headerdata = None # ?? 
+        self.framesoffset = [] # stored seek table (timestamp,offset)
+    def assignheader(self,h,hh):
+        self.headerblock = h
+        self.headerdata = hh
+    def addframe(self,h,hh,file):
+        off = file.tell()
+        t = hh["timestamp"]
+        self.newtime(t)
+        self.framesoffset.append((t,self.configid,off))
+        self.newframes += 1
+    def newtime(self,t):
+        if self.maxts is None:
+            self.maxts = t
+            self.mints = t
+        else:
+            if t > self.maxts:
+                self.maxts = t
+            if t < self.mints:
+                self.mints = t
+        self.newtimestamp = t
+    def writeseek(self,a):
+        a.write
+        for t in self.framesoffset:
+            a.write(makeindexentry(t))
+    def patchframeheader(self,a):
+        q = self        
+        q.headerdata["maxts"] = q.maxts is not None and  q.maxts or 0
+        q.headerdata["mints"] = q.mints is not None and  q.mints or 0 
+        q.headerdata["frames"] = q.newframes
+        patchadded(a,q.headerblock,q.headerdata) 
+
+

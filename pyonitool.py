@@ -22,26 +22,14 @@ import struct#
 import onifile as oni
 import shutil
 from collections import defaultdict
-
-class StreamInfo:
-    def __init__(self):
-        self.frame = 0
-        self.newframe = 0
-        self.maxts = None
-        self.mints = None
-        self.basetime = None
-        self.headerblock = None
-        self.headerdata = None
-        self.framesoffset = []
-    def newtime(self,t):
-        if self.maxts is None:
-            self.maxts = t
-            self.mints = t
-        else:
-            if t > self.maxts:
-                self.maxts = t
-            if t < self.mints:
-                self.mints = t
+try:
+    import xndec
+except:
+    xndec =None
+try:
+    import png
+except:
+    png =None
 
 def interval(s,t,tt):
     try:
@@ -49,7 +37,6 @@ def interval(s,t,tt):
         return x, y
     except:
         raise argparse.ArgumentTypeError("%s must be x,y" % t)
-
 
 if __name__ == "__main__":
     import sys,os,argparse
@@ -65,7 +52,13 @@ if __name__ == "__main__":
     parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")
     parser.add_argument('--dump',action="store_true")
-    parser.add_argument('--dupframes',action="store_true")
+    parser.add_argument('--extractcolor',help="extract the color stream single jpeg or png images. This option specifies the target path, numbering is the frame number")
+    parser.add_argument('--extractdepth',help="extract the depth stream single png images. This option specifies the target path, numbering is the frame number")
+    parser.add_argument('--extractir',help="extract the depth stream single png images. This option specifies the target path, numbering is the frame number")
+    parser.add_argument('--fseek',type=int,default=0,help="seek frame for extract")
+    parser.add_argument('--fduration',type=int,default=-1,help="duration of extraction in frames")
+    parser.add_argument('--skipframes',type=int,default=None,help="skip n frames")
+    parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
     #parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
     #parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"time",int))
     parser.add_argument('--output')
@@ -117,35 +110,36 @@ if __name__ == "__main__":
         patchaction = True
         action = "fixcut"
 
-    if args.cutbyframe is not None:
-        if action != "":
-            print "Already specified action",action
-            sys.exit(-1)
-        if args.output is None:
-            print "Required: ONI filename in output --output"
-            sys.exit(-1)
-        target = ("frame",args.cutbyframe)
-        action = "cutbyframe"
+    if False:
+        if args.cutbyframe is not None:
+            if action != "":
+                print "Already specified action",action
+                sys.exit(-1)
+            if args.output is None:
+                print "Required: ONI filename in output --output"
+                sys.exit(-1)
+            target = ("frame",args.cutbyframe)
+            action = "cutbyframe"
 
-    if args.cutbytime is not None:
-        if action != "":
-            print "Already specified action",action
-            sys.exit(-1)
-        if args.output is None:
-            print "Required: ONI filename in output --output"
-            sys.exit(-1)
-        target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
-        action = "cutbytime"
+        if args.cutbytime is not None:
+            if action != "":
+                print "Already specified action",action
+                sys.exit(-1)
+            if args.output is None:
+                print "Required: ONI filename in output --output"
+                sys.exit(-1)
+            target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
+            action = "cutbytime"
 
-    if args.checkcut:
-        if action != "":
-            print "Already specified action",action
-            sys.exit(-1)
-        if args.output is None:
-            print "Required: ONI filename in output --output"
-            sys.exit(-1)
-        action = "checkcut"
-        args.output = None
+        if args.checkcut:
+            if action != "":
+                print "Already specified action",action
+                sys.exit(-1)
+            if args.output is None:
+                print "Required: ONI filename in output --output"
+                sys.exit(-1)
+            action = "checkcut"
+            args.output = None
 
     if args.mjpeg:
         if action != "":
@@ -155,6 +149,19 @@ if __name__ == "__main__":
             print "Required: ONI filename in output --output"
             sys.exit(-1)
         action = "mjpeg"
+
+    subaction = ""
+    extractpath = ""
+    varia = ['extractcolor','extractdepth','extractir']
+    for x in varia:
+        if getattr(args,x):
+            if action != "":
+                print "Already specified action",action
+                sys.exit(-1)
+            subaction = x
+            action = "extract"
+            extractpath = getattr(args,x)
+            print "extract action",extractpath
 
     if args.dump:
         if action != "":
@@ -168,12 +175,17 @@ if __name__ == "__main__":
             sys.exit(-1)
         action = "info"
 
-    if args.dupframes:
+    if args.dupframes is not None:
         if action != "":
             print "Already specified action",action
             sys.exit(-1)
-        patchaction = True
         action = "dupframes"
+
+    if args.skipframes is not None:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        action = "skipframes"
 
     filesize = os.stat(args.file).st_size
     if patchaction:
@@ -192,15 +204,85 @@ if __name__ == "__main__":
     mid = 0 # maximum identifier
     prelast = None 
     last = None
+    stats = defaultdict(oni.StreamInfo)
+    needclose = False
+    seektableheader = None
 
-    if action == "mjpeg":
-        mid = 0 # maximum identifier
+    if action == "extract":
+        seekframe = args.fseek
+        codec = None
+        endframe = args.fduration < 0 and -1 or seekframe+args.fduration
+        targetnid = -1
+        foundhh = None
+        ob = None
+        extracttype = dict(extractcolor=oni.NODE_TYPE_IMAGE,extractdepth=oni.NODE_TYPE_DEPTH,extractir=oni.NODE_TYPE_IR)[subaction]
+        while True:
+                h = oni.readrechead(a)
+                if h is None:
+                        break
+                prelast = last
+                last = h
+                if h["rt"] == oni.RECORD_NODE_ADDED:
+                    hh = oni.parseadded(a,h)
+                    print "nidadded",h,hh
+                    if hh["nodetype"] == extracttype:
+                        print "!!found matching"
+                        targetnid = h["nid"]
+                        codec = hh["codec"]
+                        foundhh = hh
+                        if codec == "16zt":
+                            if xndec is None or xndec.doXnStreamUncompressDepth16ZWithEmbTable is None:
+                                print "xndec is missing cannot decode to png"
+                                sys.exit(-1)
+                            if png is None:
+                                print "pypng is missing"
+                                sys.exit(-1)
+                elif h["rt"] == oni.RECORD_GENERAL_PROPERTY:
+                    pp = oni.parseprop(a,h)
+                    if pp["name"] == "xnMapOutputMode" and targetnid == h["nid"]:
+                        (xres,yres) = struct.unpack("ii",pp["data"])
+                        print "found size",xres,yres,"for",h["nid"]
+                        if codec == "16zt":
+                            ob = xndec.allocoutput16(xres*yres)
+                elif h["nid"] == targetnid:
+                    if h["rt"] == oni.RECORD_NEW_DATA:
+                        pd = oni.parsedatahead(a,h)
+                        if pd["frameid"] >= seekframe and (endframe == -1 or pd["frameid"] < endframe):
+                            print pd["frameid"],h["ps"],h["fs"]
+                            if codec == "jpeg":
+                                ext = "jpeg"
+                            elif codec == "16zt":
+                                ext = "png"
+                            else:
+                                ext = "bin"
+                            of = open("%s%d.%s" % (extractpath,pd["frameid"],ext),"wb")
+                            if codec == "jpeg":
+                                of.write(a.read(h["ps"]))
+                            elif codec == "16zt":
+                                code,size = xndec.doXnStreamUncompressDepth16ZWithEmbTable(a.read(h["ps"]),ob)
+                                # save content of ob to PNG 16bit with size xres,yres
+                                w = png.Writer(width=xres,height=yres,greyscale=True,bitdepth=16)
+                                import array
+                                aa = array.array("H")
+                                aa.fromstring(ob)
+                                w.write(of,[aa[i*xres:(i+1)*xres] for i in range(0,yres)])
+                            else:
+                                print "unsupported codec",foundhh
+                                sys.exit(0)
+                            of.close()
+                        elif endframe != -1 and pd["frameid"] >= endframe:
+                            break
+                if h["rt"] == oni.RECORD_END:
+                    continue
+                a.seek(h["nextheader"],0) #h["fs"]-HEADER_SIZE+h["ps"],1)        
+    elif action == "mjpeg":
         prelast = None 
         last = None
         st = None
 
         offdict = dict()
         count = 0
+        targetnid = None
         # scan all and keep pre and last
         while True:
                 h = oni.readrechead(a)
@@ -208,28 +290,22 @@ if __name__ == "__main__":
                         break
                 prelast = last
                 last = h
-                if h["nid"] > mid:
-                        mid = h["nid"]
-                if h["nid"] == 2:
+                if h["rt"] == oni.RECORD_NODE_ADDED:
+                    hh = oni.parseadded(a,h)
+                    if hh["nodetype"] == oni.NODE_TYPE_IMAGE:
+                        targetnid = h["nid"]
+                elif h["nid"] == targetnid:
                     if h["rt"] == oni.RECORD_NEW_DATA:
-                        pd = oni.parsedata(a,h)
-                        print pd["dataoffset"],h["ps"],h["fs"]
-                        z = a.read(h["ps"])
-                        count += 1
-                        if count == 50:
-                            o = open("x.jpg","wb")
-                            o.write(z)
-                            o.close()
-                            first = False
-                        b.write(z)         
+                        pd = oni.parsedatahead(a,h)
+                        if pd["frameid"] >= seekframe and (endframe == -1 or pd["frameid"] < endframe):
+                            print pd["frameid"],h["ps"],h["fs"]
+                            b.write(a.read(h["ps"]))         
+                        elif endframe != -1 and pd["frameid"] >= endframe:
+                            break
                 if h["rt"] == oni.RECORD_END:
                     continue
                 a.seek(h["nextheader"],0) #h["fs"]-HEADER_SIZE+h["ps"],1)
-        a.close()
-        b.close()
-
     elif action == "stripcolor" or action == "stripir":
-        offdict = dict()
         # scan all and keep pre and last
         if action == "stripcolor":
             id = 1
@@ -245,6 +321,7 @@ if __name__ == "__main__":
                         mid = h["nid"]
                 if h["nid"] == id:                
                     if h["rt"] == oni.RECORD_SEEK_TABLE: # skip
+                        break
                         #st = loadseek(a,h)
                         print "seek loaded and skipped, needs update"
                         a.seek(h["nextheader"],0) #h["fs"]-HEADER_SIZE+h["ps"],1)
@@ -254,42 +331,38 @@ if __name__ == "__main__":
                     b.write(d)
                     # TODO recompute seek table
                     if h["rt"] == oni.RECORD_NEW_DATA:
-                        pd = oni.parsedata(a,h)
-                        print pd["dataoffset"],h["ps"]
+                        pd = oni.parsedatahead(a,h)
+                        print pd["frameid"],h["ps"]
                 if h["rt"] == oni.RECORD_END:
                     oni.writeend(b)
                     continue
                 a.seek(h["nextheader"],0)
-        a.close()
-        b.close()
+        needclose = True
     elif action == "cutbyframe" or action == "cutbytime":
-
-        stats = defaultdict(StreamInfo)
         while True:
                 h = oni.readrechead(a)
                 if h is None:
                         break
                 if h["rt"] == oni.RECORD_NEW_DATA:
-                    t = oni.parsedata(a,h)["timestamp"]
+                    t = oni.parsedatahead(a,h)["timestamp"]
                     q = stats[h["nid"]]
                     good = False
                     if target[0] == "frame":
-                        good = q.frame >= target[1][0] and frame <= target[1][1]
+                        good = q.oldframes >= target[1][0] and q.oldframes <= target[1][1]
                     else:
                         good = t >= target[1][0] and t <= target[1][1]
                     if good:
                         # retime
-                        if q.newframe == 0:
-                            q.basetime = t
-                        t2 = t-q.basetime
-                        q.newtime(t2)
-                        # store for seek table
-                        self.framesoffset.append((b.tell(),q.newframe))
-                        # append block
+                        if q.newframes == 0:
+                            q.oldbasetime = t
+                        t2 = t-q.oldbasetime
 
-                        # then next
-                        q.newframe += 1
-                    q.frame += 1
+                        #q.newtime(t2)
+                        #q.addframe() 
+                        #q.copyblock()
+                        #self.framesoffset.append((b.tell(),q.newframe))
+
+                    q.oldframes += 1
                 elif h["rt"] == oni.RECORD_NODE_ADDED:
                     hh = oni.parseadded(a,h)
                     q = stats[h["nid"]]
@@ -305,26 +378,16 @@ if __name__ == "__main__":
 
                 # next record
                 a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)      
-
-        # patch the stream blocks with maxts/mints and frames
-        for nid,q in stats.iteritems():
-            q.headerdata["maxts"] = q.maxts
-            q.headerdata["mints"] = q.mints
-            q.headerdata["frames"] = q.newframe
-            if q.mints is None:
-                continue
-            oni.patchadded(b,q.headerblock,q.headerdata)    
-        # patch header 0
-        h0["ts"] = max([q.maxts for x in stats.values()])
-        oni.writehead1(b,h0)                           
+        needclose = True
     elif action == "rescale":
+        # TODO update with StreamInfo
         stats = dict()
         while True:
                 h = oni.readrechead(a)
                 if h is None:
                         break
                 if h["rt"] == oni.RECORD_NEW_DATA:
-                    t = oni.parsedata(a,h)["timestamp"]
+                    t = oni.parsedatahead(a,h)["timestamp"]
                     t2 = int(t*args.rescale)
                     #print h["nid"],t,t2
                     q = stats.get(h["nid"],None)
@@ -367,18 +430,7 @@ if __name__ == "__main__":
                     
                 # next record
                 a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)      
-        for k,v in stats.iteritems():
-            print "v is",v
-            hh = v[3]
-            h = v[2]
-            hh["maxts"] = v[0]
-            hh["mints"] = v[1]
-            if v[0] is None:
-                continue
-            print "patching",a,h["nid"],hh    
-            oni.patchadded(a,h,hh)    
-        h0["ts"] = max([x[3]["maxts"] for x in stats.values()])
-        oni.writehead1(a,h0)                     
+        needclose = True
     elif action == "dupframes":
         while True:
                 h = oni.readrechead(a)
@@ -388,17 +440,41 @@ if __name__ == "__main__":
                 last = h
                 if h["nid"] > mid:
                         mid = h["nid"]
-                elif h["rt"] == oni.RECORD_SEEK_TABLE:
-                    x = oni.parseseek(a,h)
-                    y = []
-                    # duplicate here....                    
-                    h["data"] = x
-                    oni.writeseek(a,h) 
-                    break
-                # next record
-                a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)                
-        # now fix the maxts 
-        oni.writeend(a)
+                if h["rt"] == oni.RECORD_SEEK_TABLE:
+                    # TODO gen seek
+                    pass
+                elif h["rt"] == oni.RECORD_NEW_DATA:
+                    hh = oni.parsedatahead(a,h)
+                    q = stats[h["nid"]]
+                    for i in range(0,args.dupframes):
+                        q.addframe(h,hh,b)
+                        oni.copyblock(a,h,b,frame=q.newframe-1,timestamp=q.timestamp)
+                a.seek(h["nextheader"])
+        needclose = True
+    elif action == "skipframes":
+        while True:
+                h = oni.readrechead(a)
+                if h is None:
+                        break
+                prelast = last
+                last = h
+                if h["nid"] > mid:
+                        mid = h["nid"]
+                if h["rt"] == oni.RECORD_SEEK_TABLE:
+                    # TODO gen seek
+                    pass
+                elif h["rt"] == oni.RECORD_NODE_ADDED:
+                    hh = oni.parseadded(a,h)
+                    stats[h["nid"]].assignheader(h,hh) 
+                elif h["rt"] == oni.RECORD_NEW_DATA:
+                    hh = oni.parsedatahead(a,h)
+                    q = stats[h["nid"]]
+                    if (q.oldframes % args.skipframes) == 0:
+                        q.addframe(h,hh,b)
+                        oni.copyblock(a,h,b,frame=q.newframes-1,timestamp=q.newtimestamp)
+                    q.oldframes += 1
+                a.seek(h["nextheader"])
+        needclose = True
     elif action == "fixcut" or action == "checkcut":
         while True:
                 h = oni.readrechead(a)
@@ -408,6 +484,10 @@ if __name__ == "__main__":
                 last = h
                 if h["nid"] > mid:
                         mid = h["nid"]
+                elif h["rt"] == oni.RECORD_NEW_DATA:
+                    hh = oni.parsedatahead(a,h)
+                    q = stats[h["nid"]]
+                    q.addframe(h,hh)
                 # next record
                 a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)                
         if True:
@@ -420,12 +500,14 @@ if __name__ == "__main__":
             if action == "fixcut":
                 a.truncate(prelast["nextheader"])
             last = prelast
+            needclose = True
 
         if last["rt"] != oni.RECORD_END:
             print "missing RECORD_END. Last Record is:",last["rt"],"appending"
             if action == "fixcut":
                 a.seek(0,2)
                 oni.writeend(a)
+                needclose = True
 
         if h0["maxnid"] != mid:
             print "bad maxnid",h0["maxnid"],"vs",mid,"fixing"
@@ -433,6 +515,7 @@ if __name__ == "__main__":
             if action == "fixcut":
                 a.seek(0,0)
                 oni.writehead1(a,h0)
+                needclose = True
         else:
             print "header ok, no changes"
 
@@ -443,7 +526,7 @@ if __name__ == "__main__":
                 if h is None:
                         break
                 if h["rt"] == oni.RECORD_NEW_DATA:
-                    print h["nid"],oni.parsedata(a,h)["timestamp"]
+                    print h["nid"],oni.parsedatahead(a,h)["timestamp"]
 
                 # next record
                 a.seek(h["nextheader"],0)
@@ -464,7 +547,7 @@ if __name__ == "__main__":
                 q = dict(frames=0)
                 streams[h["nid"]] = q
             if h["rt"] == oni.RECORD_NEW_DATA:
-                z = oni.parsedata(a,h)
+                z = oni.parsedatahead(a,h)
                 q["maxts"] = z["timestamp"]
             #elif h["rt"] == oni.RECORD_INT_PROPERTY:
             #    z = oni.parseprop(a,h)
@@ -499,7 +582,7 @@ if __name__ == "__main__":
                         mid = h["nid"]
 
                 if h["rt"] == oni.RECORD_NEW_DATA:
-                    print "newdata",h["nid"],oni.parsedata(a,h),h["ps"]
+                    print "newdata",h["nid"],oni.parsedatahead(a,h),h["ps"]
                 elif h["rt"] == oni.RECORD_NODE_DATA_BEGIN:
                     print "nodebegin",h["nid"]
                 elif h["rt"] == oni.RECORD_NODE_ADDED:
@@ -533,5 +616,15 @@ if __name__ == "__main__":
             print "maxnodeid",mid
     else:
         print "unknown action",action
+
+    if needclose:
+        # if need to close first PATCH the NODE ADDED
+        # then patch the writeseek        
+        for q in stats.values():
+            print "writing",q
+            q.patchframeheader(b)
+            q.writeseek(b)
+        h0["ts"] = max([q.maxts for q in stats.values()])
+        oni.writehead1(b,h0)                           
     a.close()
 
