@@ -8,19 +8,21 @@
 # - fix truncated file
 # - extract motion jpeg of color
 # - remove color component
+# - extract single image/depth
 #
 # Possible future:
-# - extract single image/depth
-# - split/cut
+# - IN PROGRESS split/cut
+# - IN PROGRESS 
 # - dump stats
 #
 # TODO: XN_STREAM_PROPERTY_S2D_TABLE
 #
-# Version 2015/06/09
+# Version 2015/06/18
 
 import struct#
 import onifile as oni
 import shutil
+import array
 from collections import defaultdict
 try:
     import xndec
@@ -54,11 +56,13 @@ if __name__ == "__main__":
     parser.add_argument('--dump',action="store_true")
     parser.add_argument('--extractcolor',help="extract the color stream single jpeg or png images. This option specifies the target path, numbering is the frame number")
     parser.add_argument('--extractdepth',help="extract the depth stream single png images. This option specifies the target path, numbering is the frame number")
+    #parser.add_argument('--extractboth',help="extract the depth and color stream as png and jpeg respectively. This option specifies the target path, numbering is the frame number")
     parser.add_argument('--extractir',help="extract the depth stream single png images. This option specifies the target path, numbering is the frame number")
     parser.add_argument('--fseek',type=int,default=0,help="seek frame for extract")
     parser.add_argument('--fduration',type=int,default=-1,help="duration of extraction in frames")
     parser.add_argument('--skipframes',type=int,default=None,help="skip n frames")
     parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
+    parser.add_argument('--coloreddepth',action="store_true",help="colored depth")
     #parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
     #parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"time",int))
     parser.add_argument('--output')
@@ -152,7 +156,7 @@ if __name__ == "__main__":
 
     subaction = ""
     extractpath = ""
-    varia = ['extractcolor','extractdepth','extractir']
+    varia = ['extractcolor','extractdepth','extractir'] #,'extractboth']
     for x in varia:
         if getattr(args,x):
             if action != "":
@@ -215,7 +219,7 @@ if __name__ == "__main__":
         targetnid = -1
         foundhh = None
         ob = None
-        extracttype = dict(extractcolor=oni.NODE_TYPE_IMAGE,extractdepth=oni.NODE_TYPE_DEPTH,extractir=oni.NODE_TYPE_IR)[subaction]
+        extracttype = dict(extractboth=-1,extractcolor=oni.NODE_TYPE_IMAGE,extractdepth=oni.NODE_TYPE_DEPTH,extractir=oni.NODE_TYPE_IR)[subaction]
         while True:
                 h = oni.readrechead(a)
                 if h is None:
@@ -226,10 +230,10 @@ if __name__ == "__main__":
                     hh = oni.parseadded(a,h)
                     print "nidadded",h,hh
                     if hh["nodetype"] == extracttype:
-                        print "!!found matching"
                         targetnid = h["nid"]
                         codec = hh["codec"]
                         foundhh = hh
+                        print "!!found matching for ",targetnid,codec
                         if codec == "16zt":
                             if xndec is None or xndec.doXnStreamUncompressDepth16ZWithEmbTable is None:
                                 print "xndec is missing cannot decode to png"
@@ -241,31 +245,38 @@ if __name__ == "__main__":
                     pp = oni.parseprop(a,h)
                     if pp["name"] == "xnMapOutputMode" and targetnid == h["nid"]:
                         (xres,yres) = struct.unpack("ii",pp["data"])
-                        print "found size",xres,yres,"for",h["nid"]
+                        print "found size",xres,yres,"for",h["nid"],codec
                         if codec == "16zt":
                             ob = xndec.allocoutput16(xres*yres)
                 elif h["nid"] == targetnid:
                     if h["rt"] == oni.RECORD_NEW_DATA:
                         pd = oni.parsedatahead(a,h)
                         if pd["frameid"] >= seekframe and (endframe == -1 or pd["frameid"] < endframe):
-                            print pd["frameid"],h["ps"],h["fs"]
+                            print "newdata",pd["frameid"],h["ps"],h["fs"],codec
                             if codec == "jpeg":
                                 ext = "jpeg"
                             elif codec == "16zt":
                                 ext = "png"
                             else:
                                 ext = "bin"
-                            of = open("%s%d.%s" % (extractpath,pd["frameid"],ext),"wb")
+                            outfile = "%s%d.%s" % (extractpath,pd["frameid"],ext)
+                            print outfile,codec
+                            of = open(outfile,"wb")
                             if codec == "jpeg":
                                 of.write(a.read(h["ps"]))
                             elif codec == "16zt":
                                 code,size = xndec.doXnStreamUncompressDepth16ZWithEmbTable(a.read(h["ps"]),ob)
-                                # save content of ob to PNG 16bit with size xres,yres
-                                w = png.Writer(width=xres,height=yres,greyscale=True,bitdepth=16)
-                                import array
                                 aa = array.array("H")
                                 aa.fromstring(ob)
-                                w.write(of,[aa[i*xres:(i+1)*xres] for i in range(0,yres)])
+                                rows = [aa[i*xres:(i+1)*xres] for i in range(0,yres)]
+                                if args.coloreddepth:                                    
+                                    # save content of ob to PNG 16bit with size xres,yres
+                                    w = png.Writer(width=xres,height=yres,greyscale=True,bitdepth=8)
+                                    w.write(of,[[int(x*255.0/8000.0) for x in y] for y in rows])
+                                else:
+                                    # save content of ob to PNG 16bit with size xres,yres
+                                    w = png.Writer(width=xres,height=yres,greyscale=True,bitdepth=16)
+                                    w.write(of,rows)
                             else:
                                 print "unsupported codec",foundhh
                                 sys.exit(0)
@@ -549,9 +560,9 @@ if __name__ == "__main__":
             if h["rt"] == oni.RECORD_NEW_DATA:
                 z = oni.parsedatahead(a,h)
                 q["maxts"] = z["timestamp"]
-            #elif h["rt"] == oni.RECORD_INT_PROPERTY:
-            #    z = oni.parseprop(a,h)
-            #    print "intprop",h["nid"],z
+            elif h["rt"] == oni.RECORD_INT_PROPERTY:
+                z = oni.parseprop(a,h)
+                print "intprop",h["nid"],z
             elif h["rt"] == oni.RECORD_NODE_ADDED:
                 hh = oni.parseadded(a,h)
                 q.update(hh)

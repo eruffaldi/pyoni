@@ -153,7 +153,7 @@ def writeseek(a,h):
     print "writeseek",len(h["data"])
     a.seek(h["poffset"],0)
     for x in h["data"]:
-        y = makeindex(x)
+        y = makeindexentry(x)
         a.write(y)
 
 def parseseek(a,h):
