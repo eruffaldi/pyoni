@@ -113,10 +113,10 @@ def skip(args,a,b):
         	w.copyblock(h,a)
     w.finalize()
 
-def dupframes(args,a):
+def dupframes(args,a,b):
     r = oni.Reader(a)
     w = oni.Writer(b)
-    dt = 13 #ms
+    dt = 33333 #ms virtual
     qf = dict()
     while True:
         h = r.next()
@@ -129,12 +129,12 @@ def dupframes(args,a):
             dd = a.read(h["ps"])
             qff = qf.get(h["nid"])
             if qff is None:
-            	qff = [hh["frameid"],hh["timestamp"]]
+            	qff = dict(frameid=hh["frameid"],timestamp=hh["timestamp"])
             	qf[h["nid"]] = qff
             for i in range(0,args.dupframes):
-	            w.addframe(h["nid"],qf["frameid"],qf["timestamp"],dd)
-	            qf["frameid"] += 1
-	            qf["timestamp"] += dt
+	            w.addframe(h["nid"],qff["frameid"],qff["timestamp"],dd)
+	            qff["frameid"] += 1
+	            qff["timestamp"] += dt
         else:
         	w.copyblock(h,a)
     w.finalize()

@@ -218,6 +218,9 @@ if __name__ == "__main__":
         if action != "":
             print "Already specified action",action
             sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
         action = "dupframes"
 
     if args.skipframes:
@@ -257,7 +260,7 @@ if __name__ == "__main__":
     elif action == "copy":
         toolcut.copy(args,a,b)
     elif action == "dupframes":
-        toolcut.dupframes(args,a)
+        toolcut.dupframes(args,a,b)
     elif action == "seeks":
         toolinfo.seeks(args,a)
     elif action == "skipframes":
