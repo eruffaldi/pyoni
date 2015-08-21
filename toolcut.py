@@ -113,24 +113,29 @@ def skip(args,a,b):
         	w.copyblock(h,a)
     w.finalize()
 
-"""
 def dupframes(args,a):
+    r = oni.Reader(a)
+    w = oni.Writer(b)
+    dt = 13 #ms
+    qf = dict()
     while True:
-            h = oni.readrechead(a)
-            if h is None:
-                    break
-            prelast = last
-            last = h
-            if h["nid"] > mid:
-                    mid = h["nid"]
-            if h["rt"] == oni.RECORD_SEEK_TABLE:
-                # TODO gen seek
-                pass
-            elif h["rt"] == oni.RECORD_NEW_DATA:
-                hh = oni.parsedatahead(a,h)
-                q = stats[h["nid"]]
-                for i in range(0,args.dupframes):
-                    q.addframe(h,hh,b)
-                    oni.copyblock(a,h,b,frame=q.newframe-1,timestamp=q.timestamp)
-            a.seek(h["nextheader"])
-"""
+        h = r.next()
+        if h is None:
+            break
+        elif h["rt"] == oni.RECORD_SEEK_TABLE:
+        	w.emitseek(h["nid"])
+        elif h["rt"] == oni.RECORD_NEW_DATA:
+            hh = oni.parsedatahead(a,h)
+            dd = a.read(h["ps"])
+            qff = qf.get(h["nid"])
+            if qff is None:
+            	qff = [hh["frameid"],hh["timestamp"]]
+            	qf[h["nid"]] = qff
+            for i in range(0,args.dupframes):
+	            w.addframe(h["nid"],qf["frameid"],qf["timestamp"],dd)
+	            qf["frameid"] += 1
+	            qf["timestamp"] += dt
+        else:
+        	w.copyblock(h,a)
+    w.finalize()
+
