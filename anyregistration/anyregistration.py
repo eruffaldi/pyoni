@@ -95,10 +95,11 @@ def doregister2color(outc,depthin,colorin,sizergb,Drgb,Krgb,sizedepth,Ddepth,Kde
 	poutc = ctypes.cast(outc,p8)
 	prgb = ctypes.cast(ctypes.c_char_p(colorin),p8)
 	if isinstance(depthin,array.array):
+		print "input is array"
 		addr, count = depthin.buffer_info()
 		pdepth = ctypes.cast(addr, p16)
 	else:
-		pdepth = ctypes.cast(ctypes.c_char_p(depthin),p16)
+		pdepth = ctypes.cast(depthin,p16)
 	pKdepth = ad9(*Kdepth)
 	pDdepth = ad5(*Ddepth)
 	pKrgb = ad9(*Krgb)
@@ -106,7 +107,7 @@ def doregister2color(outc,depthin,colorin,sizergb,Drgb,Krgb,sizedepth,Ddepth,Kde
 	pR = ad9(*R)
 	pT = ad3(*T)
 	register2color(poutc,sizergb[0],sizergb[1],prgb,sizedepth[0],sizedepth[1],pdepth,pKdepth,pKrgb,pR,pT)
-	return outc.raw
+	return outc
 
 def doregister2depth(outd,depthin,colorin,sizergb,Drgb,Krgb,sizedepth,Ddepth,Kdepth,R,T):
 	if outd is None:
@@ -127,7 +128,7 @@ def doregister2depth(outd,depthin,colorin,sizergb,Drgb,Krgb,sizedepth,Ddepth,Kde
 	pT = ad3(*T)
 	print ctypes.addressof(poutd.contents)
 	register2depth(poutd,sizergb[0],sizergb[1],prgb,sizedepth[0],sizedepth[1],pdepth,pKdepth,pKrgb,pR,pT)
-	return outd.raw
+	return outd
 
 #TODO merge the merged images and output ad jpeg or png to show alignment
 
@@ -168,12 +169,12 @@ if __name__ == '__main__':
 	outd = doregister2depth(None,ind,inc,size,Drgb,Krgb,size,Ddepth,Kdepth,R,T)
 
 	if indepth.endswith(".png"):
-		savedepthpng(outd,size,"outdepth16.png")
-		savedepthpngcolor(outd,size,"outdepthc.png")
+		savedepthpng(outd.raw,size,"outdepth16.png")
+		savedepthpngcolor(outd.raw,size,"outdepthc.png")
 	else:
-		savedepth(outd,"outdepth.bin")
+		savedepth(outd.raw,"outdepth.bin")
 
-	outci = buffer2image(outc,size)
+	outci = buffer2image(outc.raw,size)
 	saveimage(outci,"outimage.jpg")
 
 	outci = buffer2image(mergedepthcolor(ind,inc),size)

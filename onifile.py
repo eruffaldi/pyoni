@@ -28,11 +28,13 @@ def makeindexentry(a):
     else:
         return struct.pack("=qiq",a["timestamp"],a["config"],a["offset"])
 
-#BAD
 NODE_TYPE_DEVICE = 1
 NODE_TYPE_DEPTH = 2
 NODE_TYPE_IMAGE= 3
 NODE_TYPE_IR = 4
+#NODE_TYPE_CLOUD = 5 # ADDED by ER, means 3 floats of the cloud decomposed, associated to the
+#   just the points, then the color is take from IMAGE if registered...
+#   otherwise needs an additional (secondary) IMAGE...
 
 XN_CODEC_UNCOMPRESSED =XN_CODEC_ID('N','O','N','E')
 XN_CODEC_16Z = XN_CODEC_ID('1','6','z','P')

@@ -59,6 +59,7 @@ if __name__ == "__main__":
     parser.add_argument('--stripdepth',action="store_true")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--register',action="store_true")
+    parser.add_argument('--registerusedepth',action="store_true",help="usesdepth")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")
     parser.add_argument('--extractcolor',help="extract the color stream single jpeg or png images. This option specifies the target path, numbering is the frame number")
     parser.add_argument('--extractdepth',help="extract the depth stream single png images. This option specifies the target path, numbering is the frame number")

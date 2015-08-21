@@ -33,6 +33,13 @@ f.argtypes = [ctypes.c_char_p,ctypes.c_int,ctypes.POINTER(ctypes.c_uint8),ctypes
 f.restype = ctypes.c_int
 XnStreamUncompressConf4 = f
 
+#XnStatus XnStreamCompressDepth16ZWithEmbTable(const XnUInt16* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize, XnUInt16 nMaxValue)
+f = x.XnStreamCompressDepth16ZWithEmbTable
+et = ctypes.POINTER(ctypes.c_uint8)
+f.argtypes = [ctypes.POINTER(ctypes.c_uint16),ctypes.c_int,ctypes.POINTER(ctypes.c_uint8),ctypes.POINTER(ctypes.c_int),ctypes.c_int]
+f.restype = ctypes.c_int
+XnStreamCompressDepth16ZWithEmbTable = f
+
 
 def allocoutput16(n):
 	#pt = ctypes.c_uint16*n
@@ -59,6 +66,11 @@ def doXnStreamUncompressImage8Z(input,outputbuffer):
 def doXnStreamUncompressDepth16ZWithEmbTable(input,outputbuffer):
 	r = ctypes.c_int(len(outputbuffer));
 	rr = XnStreamUncompressDepth16ZWithEmbTable(ctypes.c_char_p(input),len(input),ctypes.cast(outputbuffer,ctypes.POINTER(ctypes.c_uint16)),ctypes.byref(r))
+	return (rr,r.value)
+
+def doXnStreamCompressDepth16ZWithEmbTable(input,outputbuffer,maxvalue):
+	r = ctypes.c_int(len(outputbuffer));
+	rr = XnStreamCompressDepth16ZWithEmbTable(ctypes.cast(input,ctypes.POINTER(ctypes.c_uint16)),len(input),ctypes.cast(outputbuffer,ctypes.POINTER(ctypes.c_uint8)),ctypes.byref(r),maxvalue)
 	return (rr,r.value)
 
 
