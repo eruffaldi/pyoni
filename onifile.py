@@ -136,9 +136,9 @@ def parsedatahead(a,h):
     frameid  = parseint(a)
     return dict(timestamp=ts,frameid=frameid)
 
-def writedatahead(a,h):
+def writedatahead(a,h,hh):
     a.seek(h["poffset"],0)
-    a.write(struct.pack("=qi",h["timestamp"],h["frameid"]))
+    a.write(struct.pack("=qi",hh["timestamp"],hh["frameid"]))
 
 def patchtime(a,h,ot):
     a.seek(h["poffset"],0)
@@ -175,13 +175,13 @@ codec2id["16z"] = XN_CODEC_16Z
 codec2id["8z"] = XN_CODEC_8Z
 codec2id["16zt"] = XN_CODEC_16Z_EMB_TABLES
 
-def patchadded(a,h,hh):
+def writedadded(a,h,hh):
     a.seek(h["poffset"],0)
     a.write(makestr(hh["name"]))
     #print "codecback",codec2id.get(hh["codec"],hh["codec"])
     ocodec = codec2id.get(hh["codec"],hh["codec"])
     print h,hh
-    a.write(struct.pack("=iiiqq",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"]))
+    a.write(struct.pack("=iiiqqq",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"],hh["seektable"]))
 def parseadded(a,h):
     a.seek(h["poffset"],0)
     name = parsestr(a)
@@ -190,6 +190,7 @@ def parseadded(a,h):
     nframes = parseint(a)
     mints = parseint64(a)
     maxts = parseint64(a)
+    seektable =parseint64(a) # seektable header data
     ocodec = codec
     if codec == XN_CODEC_UNCOMPRESSED:
         codec = "raw"
@@ -202,7 +203,7 @@ def parseadded(a,h):
     elif codec == XN_CODEC_JPEG:
         codec = "jpeg"
     #print "codecin",codec,ocodec
-    return dict(name=name,nodetype=nodetype,codec=codec,frames=nframes,mints=mints,maxts=maxts)
+    return dict(name=name,nodetype=nodetype,codec=codec,frames=nframes,mints=mints,maxts=maxts,seektable=seektable)
 
 def parseprop(a,h):
     a.seek(h["poffset"],0)
@@ -222,6 +223,8 @@ def writeprop(a,h,z):
         print "prop type unsupported",h,z
 
 
+def emptyhead1():
+    return dict(magic="NI10",version=(1,0,1,0),maxnid=0,ts=0)
 
 def writehead1(a,h):
     """writes a new header"""
@@ -322,11 +325,13 @@ class StreamInfo:
         self.maxts = None # of new frame
         self.mints = None # of new frame
         self.configid = 0
+        self.emitted = False
 
         self.headerblock = None # ??
         self.headerdata = None # ?? 
-        self.framesoffset = [] # stored seek table (timestamp,offset)
-    def assignheader(self,h,hh):
+        self.framesoffset = [(0,0,0)] # stored seek table (timestamp,offset)
+        self.headerseek = None # seek header
+    def assignnodeadded(self,h,hh):
         self.headerblock = h
         self.headerdata = hh
     def addframe(self,h,hh,file):
@@ -346,15 +351,26 @@ class StreamInfo:
                 self.mints = t
         self.newtimestamp = t
     def writeseek(self,a):
-        a.write
-        for t in self.framesoffset:
-            a.write(makeindexentry(t))
-    def patchframeheader(self,a):
-        q = self        
+        self.emitted = True
+        q = self 
+        off = a.tell()  #!!
+        q.headerseek = dict(rt=RECORD_SEEK_TABLE,
+            ps=len(self.framesoffset)*20, #qiq
+            fs=28, # standard
+            nid=self.headerblock["nid"],
+            undopos=0)
         q.headerdata["maxts"] = q.maxts is not None and  q.maxts or 0
         q.headerdata["mints"] = q.mints is not None and  q.mints or 0 
         q.headerdata["frames"] = q.newframes
-        patchadded(a,q.headerblock,q.headerdata) 
+        if len(self.framesoffset) > 1: # skip 0
+            q.headerdata["seektable"] = off 
+            writehead(a,self.headerseek)
+            for t in self.framesoffset:
+                a.write(makeindexentry(t))
+        else:
+            q.headerdata["seektable"] = 0
+    def fixnodeadded(self,a):
+        writedadded(a,self.headerblock,self.headerdata) 
 
 class Reader:
     def __init__(self,file,h0=None):
@@ -408,43 +424,84 @@ class Patcher(Reader):
     def finalize(self):
         for q in self.stats.values():
             print "writing",q
-            q.patchframeheader(b)
-            q.writeseek(b)
+            q.patchframeheader(self.file)
+            q.writeseek(self.file)
         self.h0["ts"] = max([q.maxts for q in self.stats.values()])
         writehead1(self.file,self.h0)                           
         writeend(self.file)                    
 
 class Writer:
-    def __init__(self,file,h0):
+    def __init__(self,file,h0=None):
         self.file = file
-        self.h0 = h0
         self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
-
+        self.mid = -1
+        if h0 is None:
+            self.h0 = emptyhead1()
+        else:
+            self.h0 = dict()
+            self.h0.update(h0)
+        writehead1(self.file,self.h0)
+        self.endemitted = False
     def addproperty(self,header,content):
         writehead(self.file,header) 
         header["poffset"] = self.file.tell()       
         writeprop(self.file,header,content)
     def copyblock(self,header,file):
-        writehead(self.file,header)
-        file.seek(header["poffset"])
-        d = file.read(header["ps"]+header["fs"]-HEADER_SIZE)
-        self.file.write(d)
+        if header["nid"] > self.mid:
+            self.mid = header["nid"]
+        file.seek(header["poffset"]) # got to data
+        d = file.read(header["ps"]+header["fs"]-HEADER_SIZE) # ps + fs !
 
-    def addframe(self,nid,h,timestamp,content):
-        writehead(self.file,h) 
-        header["poffset"] = self.file.tell()       
-        writedatahead(self.file,nid=nid,timestamp=timestamp)
-        q = stats[h["nid"]]
+        writehead(self.file,header) # same header 
+        po = self.file.tell() # save output location
+        self.file.write(d) # content fs+ps
+
+        if header["rt"] == RECORD_NODE_ADDED:
+            # build node added for stats and seektable
+            hh = dict()
+            hh.update(header) 
+            hh["poffset"] = po
+
+            hd = parseadded(file,header) # parse
+            self.stats[header["nid"]].assignnodeadded(hh,hd)
+
+            print "adding RECORD_NODE_ADDED to output",hh,hd
+        elif header["rt"] == RECORD_END:
+            self.endemitted = True
+    def addframe(self,nid,frameid,timestamp,content):
+        if nid > self.mid:
+            self.mid = nid
+        # basehead is 5*4=20 + 8 pos = 28
+        # extra data (frame and timestamp)=12
+        h = dict(rt=RECORD_NEW_DATA,nid=nid,fs=28+12,ps=len(content),undopos=0)
+        writehead(self.file,h)         
+        h["poffset"] = self.file.tell()     # for the seektable 
+        hh = dict(frameid=frameid,timestamp=timestamp) # fs
+        writedatahead(self.file,h,hh) # fs content write
+        self.file.write(content) # ps
+
+        # add for seektable, add frame
+        q = self.stats[h["nid"]]
         q.addframe(h,hh,self.file)
-        copyblock(a,h,self.file,frame=q.newframe-1,timestamp=q.timestamp)
-
-        # and then the 
-    def finalize(self):
+    def emitseek(self,nid):
         for q in self.stats.values():
-            print "writing",q
-            q.patchframeheader(b)
-            q.writeseek(b)
-        writeend(self.file)                    
+            if q.headerblock["nid"] == nid and not q.emitted:
+                print "writingseektable",q
+                q.writeseek(self.file) # APPENDED
+    def finalize(self):      
+        if not self.endemitted:
+            writeend(self.file)       # APPENDED TWICE
+            self.endemitted = True
+        for q in self.stats.values():
+            if not q.emitted:
+                print "writingseektable",q
+                q.writeseek(self.file) # APPENDED
+        # patch
+        for q in self.stats.values():
+            q.fixnodeadded(self.file) # seeks to location
+
+        # patch the head
+        self.h0["maxnid"]   = self.mid
         self.h0["ts"] = max([q.maxts for q in self.stats.values()])
         writehead1(self.file,self.h0)       
 

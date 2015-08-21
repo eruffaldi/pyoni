@@ -13,8 +13,20 @@ def info(args,a):
     for k,v in r.streams.iteritems():
         print k,v
 
+def seeks(args,a):
+    """prints seeks"""
+    r = oni.Reader(a)
+    while True:
+        h = r.next()
+        if h is None:
+            break
+        if h["rt"] == oni.RECORD_SEEK_TABLE:
+            q = oni.parseseek(a,h)
+            for qq in q["data"]:
+                print qq
+
 def times(args,a):
-    """prints times"""
+    """prints times info"""
     r = oni.Reader(a)
     while True:
         h = r.next()
@@ -28,6 +40,7 @@ def dump(args,a):
     last = None
     # scan all and keep pre and last
     mid = -1
+    print "fileheader",r.h0
     while True:
         h = r.next()
         pt = a.tell()
@@ -40,9 +53,9 @@ def dump(args,a):
         if h["rt"] == oni.RECORD_NEW_DATA:
             print "newdata",h["nid"],oni.parsedatahead(a,h),h["ps"]
         elif h["rt"] == oni.RECORD_NODE_DATA_BEGIN:
-            print "nodebegin",h["nid"]
+            print "nodebegin",h["nid"],h
         elif h["rt"] == oni.RECORD_NODE_ADDED:
-            print "nodeadded",h["nid"],oni.parseadded(a,h)
+            print "nodeadded",h["nid"],h,oni.parseadded(a,h)
         elif h["rt"] == oni.RECORD_INT_PROPERTY:
             print "intprop",h["nid"],oni.parseprop(a,h)
         elif h["rt"] == oni.RECORD_GENERAL_PROPERTY:
@@ -53,16 +66,20 @@ def dump(args,a):
                 data = dict(xres=xres,yres=yres)
                 print "\t",data
         elif h["rt"] == oni.RECORD_NODE_STATE_READY:
-            print "ready",h["nid"]
+            print "ready",h
         elif h["rt"] == oni.RECORD_NODE_REMOVED:
-            print "removed",h["nid"]
+            print "removed",h
         elif h["rt"] == oni.RECORD_SEEK_TABLE:
-            print "seektable",h["nid"]
+            print "seektable",h
         elif h["rt"] == oni.RECORD_END:
-            print "end"
+            print "end",h
         else:
             print h["rt"]
     if True:
-        print "prelast",prelast
-        print "last",last
-        print "maxnodeid",mid   
+        print "blocks stats:"
+        print "\tprelast",prelast
+        print "\tlast",last
+        print "\tmaxnodeid",mid   
+    print "streams stats:"
+    for k,v in r.streams.iteritems():
+        print "\t",k,v

@@ -48,10 +48,12 @@ if __name__ == "__main__":
     parser.add_argument('file',help='ONI filename')
     parser.add_argument('--info',action="store_true")
     parser.add_argument('--times',action="store_true",help="print times of each frame")
+    parser.add_argument('--seeks',action="store_true",help="print seeks")
     parser.add_argument('--dump',action="store_true")
+    parser.add_argument('--copy',action="store_true",help="simply copies the content of the ONI via parsing (rebuilds the seektable only)")
     parser.add_argument('--rescale',type=float,default=0.0,help="rescale timings")
-    parser.add_argument('--fixcut',action="store_true",help="fixes cut file")
-    parser.add_argument('--checkcut',action="store_true",help="checks if file was cut")
+    parser.add_argument('--fixcut',action="store_true",help="fixes cut file NOT TESTED HERE")
+    parser.add_argument('--checkcut',action="store_true",help="checks if file was cut NOT TESTED HERE")
     parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
     parser.add_argument('--stripcolor',action="store_true")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
@@ -77,6 +79,17 @@ if __name__ == "__main__":
 
     action = ""
     patchaction = False
+
+
+
+    if args.mjpeg:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "mjpeg"
 
     if args.rescale:
         if action != "":
@@ -110,11 +123,38 @@ if __name__ == "__main__":
         if action != "":
             print "Already specified action",action
             sys.exit(-1)
-        if args.output is None:
+        if args.output is not None:
             print "Required: ONI filename in output --output"
             sys.exit(-1)
         patchaction = True
         action = "fixcut"
+
+    if args.copy:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "copy"
+
+    if args.seeks:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is not None:
+            print "Not Required output"
+            sys.exit(-1)
+        action = "seeks"
+
+    if args.checkcut:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is not None:
+            print "Not Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "checkcut"
 
     if False:
         if args.cutbyframe is not None:
@@ -137,24 +177,7 @@ if __name__ == "__main__":
             target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
             action = "cutbytime"
 
-        if args.checkcut:
-            if action != "":
-                print "Already specified action",action
-                sys.exit(-1)
-            if args.output is None:
-                print "Required: ONI filename in output --output"
-                sys.exit(-1)
-            action = "checkcut"
-            args.output = None
 
-    if args.mjpeg:
-        if action != "":
-            print "Already specified action",action
-            sys.exit(-1)
-        if args.output is None:
-            print "Required: ONI filename in output --output"
-            sys.exit(-1)
-        action = "mjpeg"
 
     subaction = ""
     extractpath = ""
@@ -221,8 +244,12 @@ if __name__ == "__main__":
         toolcut.cut(args,action,a,b)
     elif action == "rescale":
         tooltime.rescale(args,a)
+    elif action == "copy":
+        toolcut.copy(args,a,b)
     elif action == "dupframes":
         toolcut.dupframes(args,a)
+    elif action == "seeks":
+        toolinfo.seeks(args,a)
     elif action == "skipframes":
         toolfix.cut(args,action,a)
     elif action == "fixcut" or action == "checkcut":

@@ -1,7 +1,31 @@
+import onifile as oni
+import struct
 
+def copy(args,a,b):
+    r = oni.Reader(a)
+    print "firstheader",r.h0
+    w = oni.Writer(b,r.h0)
+    while True:
+        h = r.next()
+        if h is None:
+            break
+        elif h["rt"] == oni.RECORD_SEEK_TABLE:
+        	w.emitseek(h["nid"])
+        elif h["rt"] == oni.RECORD_NEW_DATA:
+            hh = oni.parsedatahead(a,h)            
+            print dict(nid=h["nid"],ps=h["ps"],fs=h["fs"],frameid=hh["frameid"],timestamp=hh["timestamp"])
+            w.addframe(h["nid"],hh["frameid"],hh["timestamp"],a.read(h["ps"]))
+        else:
+        	w.copyblock(h,a)
 
+    w.finalize()
+
+"""
 def strip(args,action,a,b):
     # scan all and keep pre and last
+    r = oni.Reader(a)
+    w = oni.Writer(b)
+
     if action == "stripcolor":
         id = 1
     else:
@@ -12,8 +36,6 @@ def strip(args,action,a,b):
                     break
             prelast = last
             last = h
-            if h["nid"] > mid:
-                    mid = h["nid"]
             if h["nid"] == id:                
                 if h["rt"] == oni.RECORD_SEEK_TABLE: # skip
                     break
@@ -100,4 +122,25 @@ def skip(args,action,a):
                 q.oldframes += 1
             a.seek(h["nextheader"])
     needclose = True
-    
+
+
+def dupframes(args,a):
+    while True:
+            h = oni.readrechead(a)
+            if h is None:
+                    break
+            prelast = last
+            last = h
+            if h["nid"] > mid:
+                    mid = h["nid"]
+            if h["rt"] == oni.RECORD_SEEK_TABLE:
+                # TODO gen seek
+                pass
+            elif h["rt"] == oni.RECORD_NEW_DATA:
+                hh = oni.parsedatahead(a,h)
+                q = stats[h["nid"]]
+                for i in range(0,args.dupframes):
+                    q.addframe(h,hh,b)
+                    oni.copyblock(a,h,b,frame=q.newframe-1,timestamp=q.timestamp)
+            a.seek(h["nextheader"])
+"""
