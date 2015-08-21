@@ -212,9 +212,9 @@ if __name__ == "__main__":
     if action == "register":
         toolreg.register(args,a,b)
     elif action == "extract":
-        toolext.extract(args,a)        
+        toolext.extract(args,subaction,extractpath,a)        
     elif action == "mjpeg":
-        toolext.extractmjpeg(args,a)        
+        toolext.extractmjpeg(args,a,b)        
     elif action == "stripcolor" or action == "stripir":
         toolcut.strip(args,action,a,b)
     elif action == "cutbyframe" or action == "cutbytime":
