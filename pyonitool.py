@@ -23,7 +23,7 @@ import struct#
 import onifile as oni
 import shutil
 import array
-import toolreg,toolext,toolcut,toolinfo,toolcut
+import toolreg,toolext,toolcut,toolinfo,toolcut,tooltime
 from collections import defaultdict
 try:
     import xndec
@@ -99,7 +99,6 @@ if __name__ == "__main__":
         if args.output is None:
             print "Required: ONI filename in output --output"
             sys.exit(-1)
-        patchaction = True
         action = "rescale"
 
     if args.stripcolor:
@@ -255,7 +254,7 @@ if __name__ == "__main__":
     elif action == "cutbyframe" or action == "cutbytime":
         toolcut.cut(args,target,a,b)
     elif action == "rescale":
-        tooltime.rescale(args,a)
+        tooltime.rescale(args,args.rescale,a,b)
     elif action == "copy":
         toolcut.copy(args,a,b)
     elif action == "dupframes":
