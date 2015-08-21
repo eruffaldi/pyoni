@@ -1,5 +1,5 @@
 import struct,sys
-
+from collections import defaultdict
 RECORD_END = 0x0B
 HEADER_MAGIC_SIZE = 4
 MAGIC = 0x0052494E
@@ -356,4 +356,105 @@ class StreamInfo:
         q.headerdata["frames"] = q.newframes
         patchadded(a,q.headerblock,q.headerdata) 
 
+class Reader:
+    def __init__(self,file,h0=None):
+        self.file = file
+        self.lasth = None
+        self.nodeinfo = dict()
+        self.nodetype2nid = dict()
+        if h0 is None:
+            h0 = readhead1(self.file)
+        self.h0 = h0
+        self.pseektable = None
+        self.pend = None
+    @property
+    def streams(self):
+        return self.nodeinfo
 
+    def next(self):
+        if self.lasth:
+            self.file.seek(self.lasth["nextheader"])
+        h = readrechead(self.file)
+        self.lasth = h
+        if h is None:
+            return None
+        if h["rt"] == RECORD_NEW_DATA:
+            pass
+        elif h["rt"] == RECORD_NODE_ADDED:
+            hh = parseadded(self.file,h)
+            self.nodeinfo[h["nid"]] = hh
+            self.nodetype2nid[hh["nodetype"]] = h["nid"]
+        elif h["rt"] == RECORD_GENERAL_PROPERTY:
+            pp = parseprop(self.file,h)
+            if pp["name"] == "xnMapOutputMode":
+                (xres,yres) = struct.unpack("ii",pp["data"])
+                hhnode = self.nodeinfo[h["nid"]]
+                hhnode["size"] = (xres,yres)
+        elif h["rt"] == RECORD_NEW_DATA:
+            hh = parsedatahead(self.file,h)
+            q = self.nodeinfo[hh["nid"]]
+            q["maxts"] = hh["timestamp"]
+        elif h["rt"] == RECORD_SEEK_TABLE:
+            self.pseektable = h
+        elif h["rt"] == RECORD_END:
+            self.pend = h
+        return h
+
+# inplace
+class Patcher(Reader):
+    def __init__(self,file,h0):
+        Reader.__init__(file,h0)
+        self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
+    def finalize(self):
+        for q in self.stats.values():
+            print "writing",q
+            q.patchframeheader(b)
+            q.writeseek(b)
+        self.h0["ts"] = max([q.maxts for q in self.stats.values()])
+        writehead1(self.file,self.h0)                           
+        writeend(self.file)                    
+
+class Writer:
+    def __init__(self,file,h0):
+        self.file = file
+        self.h0 = h0
+        self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
+
+    def addproperty(self,header,content):
+        writehead(self.file,header) 
+        header["poffset"] = self.file.tell()       
+        writeprop(self.file,header,content)
+    def copyblock(self,header,file):
+        writehead(self.file,header)
+        file.seek(header["poffset"])
+        d = file.read(header["ps"]+header["fs"]-HEADER_SIZE)
+        self.file.write(d)
+
+    def addframe(self,nid,h,timestamp,content):
+        writehead(self.file,h) 
+        header["poffset"] = self.file.tell()       
+        writedatahead(self.file,nid=nid,timestamp=timestamp)
+        q = stats[h["nid"]]
+        q.addframe(h,hh,self.file)
+        copyblock(a,h,self.file,frame=q.newframe-1,timestamp=q.timestamp)
+
+        # and then the 
+    def finalize(self):
+        for q in self.stats.values():
+            print "writing",q
+            q.patchframeheader(b)
+            q.writeseek(b)
+        writeend(self.file)                    
+        self.h0["ts"] = max([q.maxts for q in self.stats.values()])
+        writehead1(self.file,self.h0)       
+
+#                    writehead(b,hc)
+#                    b.write(colordata)
+
+
+#                nidc = r.nodetype2nid[NODE_TYPE_IMAGE]
+#               nidd = r.nodetype2nid[NODE_TYPE_DEPTH]
+#                q = stats[nidc]
+#                q.addframe(h,hh,b)              
+#                q = stats[nidd]
+#                q.addframe(h,hh,b)
