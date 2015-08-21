@@ -69,8 +69,8 @@ if __name__ == "__main__":
     parser.add_argument('--coloreddepth',action="store_true",help="colored depth")
     parser.add_argument('--output')
     #parser.add_argument('--extractboth',help="extract the depth and color stream as png and jpeg respectively. This option specifies the target path, numbering is the frame number")
-    #parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
-    #parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"time",int))
+    parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
+    parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"frame",int))
 
     args = parser.parse_args()
 
@@ -166,26 +166,25 @@ if __name__ == "__main__":
             sys.exit(-1)
         action = "checkcut"
 
-    if False:
-        if args.cutbyframe is not None:
-            if action != "":
-                print "Already specified action",action
-                sys.exit(-1)
-            if args.output is None:
-                print "Required: ONI filename in output --output"
-                sys.exit(-1)
-            target = ("frame",args.cutbyframe)
-            action = "cutbyframe"
+    if args.cutbyframe is not None:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        target = ("frame",args.cutbyframe)
+        action = "cutbyframe"
 
-        if args.cutbytime is not None:
-            if action != "":
-                print "Already specified action",action
-                sys.exit(-1)
-            if args.output is None:
-                print "Required: ONI filename in output --output"
-                sys.exit(-1)
-            target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
-            action = "cutbytime"
+    if args.cutbytime is not None:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
+        action = "cutbytime"
 
 
 
@@ -254,7 +253,7 @@ if __name__ == "__main__":
     elif action == "stripcolor" or action == "stripir" or action == "stripdepth":
         toolcut.strip(args,action,a,b)
     elif action == "cutbyframe" or action == "cutbytime":
-        toolcut.cut(args,action,a,b)
+        toolcut.cut(args,target,a,b)
     elif action == "rescale":
         tooltime.rescale(args,a)
     elif action == "copy":
