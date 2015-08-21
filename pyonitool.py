@@ -119,7 +119,7 @@ if __name__ == "__main__":
             print "Required: ONI filename in output --output"
             sys.exit(-1)
         action = "stripdepth"
-        
+
     if args.stripir:
         if action != "":
             print "Already specified action",action
@@ -261,7 +261,7 @@ if __name__ == "__main__":
     elif action == "seeks":
         toolinfo.seeks(args,a)
     elif action == "skipframes":
-        toolfix.cut(args,action,a)
+        toolcut.skip(args,a,b)
     elif action == "fixcut" or action == "checkcut":
         toolfix.fix(args,action,a)
     elif args.times:

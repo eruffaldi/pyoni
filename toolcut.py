@@ -1,5 +1,6 @@
 import onifile as oni
 import struct
+from collections import defaultdict
 
 def copy(args,a,b):
     r = oni.Reader(a)
@@ -90,33 +91,29 @@ def cut(args,action,a,b):
             # next record
             a.seek(h["nextheader"]) #h["fs"]-HEADER_SIZE+h["ps"]+pt,0)      
     needclose = True
+"""
 
-def skip(args,action,a):
+def skip(args,a,b):
+    r = oni.Reader(a)
+    w = oni.Writer(b)
+    qf = defaultdict(lambda: 0)
     while True:
-            h = oni.readrechead(a)
-            if h is None:
-                    break
-            prelast = last
-            last = h
-            if h["nid"] > mid:
-                    mid = h["nid"]
-            if h["rt"] == oni.RECORD_SEEK_TABLE:
-                # TODO gen seek
-                pass
-            elif h["rt"] == oni.RECORD_NODE_ADDED:
-                hh = oni.parseadded(a,h)
-                stats[h["nid"]].assignheader(h,hh) 
-            elif h["rt"] == oni.RECORD_NEW_DATA:
-                hh = oni.parsedatahead(a,h)
-                q = stats[h["nid"]]
-                if (q.oldframes % args.skipframes) == 0:
-                    q.addframe(h,hh,b)
-                    oni.copyblock(a,h,b,frame=q.newframes-1,timestamp=q.newtimestamp)
-                q.oldframes += 1
-            a.seek(h["nextheader"])
-    needclose = True
+        h = r.next()
+        if h is None:
+            break
+        elif h["rt"] == oni.RECORD_SEEK_TABLE:
+        	w.emitseek(h["nid"])
+        elif h["rt"] == oni.RECORD_NEW_DATA:
+            hh = oni.parsedatahead(a,h)
+            oldframe = qf[h["nid"]]
+            if (oldframe % args.skipframes) == 0:
+	            w.addframe(h["nid"],hh["frameid"],hh["timestamp"],a.read(h["ps"]))
+            qf[h["nid"]] += 1
+        else:
+        	w.copyblock(h,a)
+    w.finalize()
 
-
+"""
 def dupframes(args,a):
     while True:
             h = oni.readrechead(a)
