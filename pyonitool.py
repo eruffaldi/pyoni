@@ -56,6 +56,7 @@ if __name__ == "__main__":
     parser.add_argument('--checkcut',action="store_true",help="checks if file was cut NOT TESTED HERE")
     parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
     parser.add_argument('--stripcolor',action="store_true")
+    parser.add_argument('--stripdepth',action="store_true")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--register',action="store_true")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")
@@ -110,6 +111,15 @@ if __name__ == "__main__":
             sys.exit(-1)
         action = "stripcolor"
 
+    if args.stripdepth:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "stripdepth"
+        
     if args.stripir:
         if action != "":
             print "Already specified action",action
@@ -238,7 +248,7 @@ if __name__ == "__main__":
         toolext.extract(args,subaction,extractpath,a)        
     elif action == "mjpeg":
         toolext.extractmjpeg(args,a,b)        
-    elif action == "stripcolor" or action == "stripir":
+    elif action == "stripcolor" or action == "stripir" or action == "stripdepth":
         toolcut.strip(args,action,a,b)
     elif action == "cutbyframe" or action == "cutbytime":
         toolcut.cut(args,action,a,b)

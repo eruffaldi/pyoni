@@ -20,42 +20,35 @@ def copy(args,a,b):
 
     w.finalize()
 
-"""
 def strip(args,action,a,b):
     # scan all and keep pre and last
     r = oni.Reader(a)
     w = oni.Writer(b)
 
-    if action == "stripcolor":
-        id = 1
-    else:
-        id = 2
+    ignoredtype = dict(stripcolor=oni.NODE_TYPE_IMAGE,stripdepth=oni.NODE_TYPE_DEPTH,stripir=oni.NODE_TYPE_IR)[action]
+    ignoredid = -1
     while True:
-            h = oni.readrechead(a)
-            if h is None:
-                    break
-            prelast = last
-            last = h
-            if h["nid"] == id:                
-                if h["rt"] == oni.RECORD_SEEK_TABLE: # skip
-                    break
-                    #st = loadseek(a,h)
-                    print "seek loaded and skipped, needs update"
-                    a.seek(h["nextheader"],0) #h["fs"]-HEADER_SIZE+h["ps"],1)
-                    continue
-                oni.writehead(b,h)
-                d = a.read(h["ps"]+h["fs"]-oni.HEADER_SIZE)
-                b.write(d)
-                # TODO recompute seek table
-                if h["rt"] == oni.RECORD_NEW_DATA:
-                    pd = oni.parsedatahead(a,h)
-                    print pd["frameid"],h["ps"]
-            if h["rt"] == oni.RECORD_END:
-                oni.writeend(b)
-                continue
-            a.seek(h["nextheader"],0)
-    needclose = True	
-
+        h = r.next()
+        if h is None:
+            break
+        elif h["rt"] == oni.RECORD_NODE_ADDED:
+            hh = oni.parseadded(a,h)
+            if hh["nodetype"] == ignoredtype:
+            	ignoredid = h["nid"]
+            else:
+	        	w.copyblock(h,a)
+        elif h["nid"] == ignoredid:
+        	continue
+        elif h["rt"] == oni.RECORD_SEEK_TABLE:
+        	w.emitseek(h["nid"])
+        elif h["rt"] == oni.RECORD_NEW_DATA:
+            hh = oni.parsedatahead(a,h)            
+            print dict(nid=h["nid"],ps=h["ps"],fs=h["fs"],frameid=hh["frameid"],timestamp=hh["timestamp"])
+            w.addframe(h["nid"],hh["frameid"],hh["timestamp"],a.read(h["ps"]))
+        else:
+        	w.copyblock(h,a)
+    w.finalize()
+"""
 def cut(args,action,a,b):
     while True:
             h = oni.readrechead(a)
