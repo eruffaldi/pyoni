@@ -1,7 +1,7 @@
-import onifile as oni
+from . import onifile as oni
 import struct,array
 try:
-    import xndec
+    from ..xndec import xndec as xndec 
 except:
     xndec = None
 try:

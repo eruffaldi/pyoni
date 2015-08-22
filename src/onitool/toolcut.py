@@ -1,4 +1,4 @@
-import onifile as oni
+from . import onifile as oni
 import struct
 from collections import defaultdict
 

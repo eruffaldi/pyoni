@@ -20,19 +20,19 @@
 # Version 2015/06/18
 
 import struct#
-import onifile as oni
+import onitool.onifile as oni
 import shutil
 import array
-import toolreg,toolext,toolcut,toolinfo,toolcut,tooltime
-from collections import defaultdict
+import onitool.toolext as toolext
+import onitool.toolinfo as toolinfo
+import onitool.toolcut as toolcut
+import onitool.tooltime as tooltime
 try:
-    import xndec
+    import onitool.toolreg as toolreg
 except:
-    xndec =None
-try:
-    import png
-except:
-    png =None
+    toolreg = None
+    print "missing dll for toolreg"
+
 
 def interval(s,t,tt):
     try:
@@ -58,8 +58,8 @@ if __name__ == "__main__":
     parser.add_argument('--stripcolor',action="store_true")
     parser.add_argument('--stripdepth',action="store_true")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
-    parser.add_argument('--register',action="store_true")
-    parser.add_argument('--registerusedepth',action="store_true",help="usesdepth")
+    parser.add_argument('--registercolor',action="store_true",help="registers color over depth")
+    parser.add_argument('--registerdepth',action="store_true",help="registers depth over color")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")
     parser.add_argument('--extractcolor',help="extract the color stream single jpeg or png images. This option specifies the target path, numbering is the frame number")
     parser.add_argument('--extractdepth',help="extract the depth stream single png images. This option specifies the target path, numbering is the frame number")
@@ -227,11 +227,22 @@ if __name__ == "__main__":
             print "Already specified action",action
             sys.exit(-1)
         action = "skipframes"
-    if args.register:
+    if args.registercolor:
         if action != "":
             print "Already specified action",action
             sys.exit(-1)
-        action = "register"
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "registercolor"
+    if args.registerdepth:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "Required: ONI filename in output --output"
+            sys.exit(-1)
+        action = "registerdepth"
 
     filesize = os.stat(args.file).st_size
     if patchaction:
@@ -244,8 +255,8 @@ if __name__ == "__main__":
         if action != "" and args.output is not None:
             b = open(args.output,"wb")
 
-    if action == "register":
-        toolreg.register(args,a,b)
+    if action == "registercolor" or action == "registerdepth":
+        toolreg.register(args,action,a,b)
     elif action == "extract":
         toolext.extract(args,subaction,extractpath,a)        
     elif action == "mjpeg":

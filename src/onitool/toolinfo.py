@@ -1,4 +1,4 @@
-import onifile as oni
+from . import onifile as oni
 import struct
 
 def info(args,a):
@@ -33,7 +33,8 @@ def times(args,a):
         if h is None:
             break
         if h["rt"] == oni.RECORD_NEW_DATA:
-            print h["nid"],oni.parsedatahead(a,h)["timestamp"]
+            hh = oni.parsedatahead(a,h)
+            print h["nid"],hh["frameid"],hh["timestamp"]
 
 def dump(args,a):
     r = oni.Reader(a)
