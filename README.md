@@ -69,9 +69,10 @@ optional arguments:
 Build
 =======================
 
-Two C++ codes require manual steps (for the moment):
-- xn16zdec.cpp
-- anyregistration.cpp
+Two C++ codes require manual steps using cmake and then the resulting shared libraries needs to be visible to python at startup (PATH under Windows, LD_LIBRARY_PATH under Linux, DYLD_LIBRARY_PATH under OSX)
+
+extern/xndec
+extern/anyregistration
 
 References
 =======================
