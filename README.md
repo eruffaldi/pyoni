@@ -3,7 +3,7 @@ Pure python tool for manipulating OpenNI recorded files (oni). This tool support
 
 Options
 =======================
-
+```
 usage: pyonitool.py [-h] [--info] [--times] [--seeks] [--dump] [--copy]
                     [--rescale RESCALE] [--fixcut] [--checkcut]
                     [--dupframes DUPFRAMES] [--stripcolor] [--stripdepth]
@@ -64,7 +64,7 @@ optional arguments:
                         startseconds,endseconds
   --cutbyframe CUTBYFRAME
                         cut by specifing time in frames: startframe,endframe
-
+```
   
 Build
 =======================
