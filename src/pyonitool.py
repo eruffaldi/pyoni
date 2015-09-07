@@ -24,6 +24,7 @@ import onitool.onifile as oni
 import shutil
 import array
 import onitool.toolext as toolext
+import onitool.toolreg as toolreg
 import onitool.toolinfo as toolinfo
 import onitool.toolcut as toolcut
 import onitool.tooltime as tooltime

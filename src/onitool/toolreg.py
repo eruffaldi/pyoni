@@ -3,12 +3,9 @@ from . import onifile as oni
 import shutil,io
 import array,os
 from collections import defaultdict
-from . import anyregistration.anyregistration as anyregistration
+from anyregistration import anyregistration
 from PIL import Image
-try:
-    from ..xndec import xndec as xndec
-except:
-    xndec =None
+from xndec import xndec as xndec
 try:
     import png
 except:

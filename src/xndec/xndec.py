@@ -8,7 +8,7 @@ import ctypes
 # XnStatus XnStreamUncompressConf4(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 
 
-x = ctypes.CDLL("xn16zdec.so")
+x = ctypes.CDLL("libxndec.dylib")
 f = x.XnStreamUncompressDepth16ZWithEmbTable
 et = ctypes.POINTER(ctypes.c_uint8)
 f.argtypes = [ctypes.c_char_p,ctypes.c_int,ctypes.POINTER(ctypes.c_uint16),ctypes.POINTER(ctypes.c_int)]
