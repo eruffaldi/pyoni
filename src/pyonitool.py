@@ -23,8 +23,13 @@ import struct#
 import onitool.onifile as oni
 import shutil
 import array
+import sys
 import onitool.toolext as toolext
-import onitool.toolreg as toolreg
+try:
+    import onitool.toolreg as toolreg
+except:
+    print sys.exc_info()
+    toolreg =None
 import onitool.toolinfo as toolinfo
 import onitool.toolcut as toolcut
 import onitool.tooltime as tooltime
@@ -59,6 +64,7 @@ if __name__ == "__main__":
     parser.add_argument('--stripcolor',action="store_true")
     parser.add_argument('--stripdepth',action="store_true")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
+    parser.add_argument('--no-registersynctime',dest="registersynctime",action="store_false",help="no sync times while registering")
     parser.add_argument('--registercolor',action="store_true",help="registers color over depth")
     parser.add_argument('--registerdepth',action="store_true",help="registers depth over color")
     parser.add_argument('--mjpeg',action="store_true",help="extract the color stream as motion jpeg")

@@ -14,19 +14,6 @@ def XN_CODEC_ID(c1, c2, c3, c4):
     c4 = ord(c4)
     return ((c4 << 24) | (c3 << 16) | (c2 << 8) | c1)
 
-def parseindexentry(a):
-    """decodes the DataIndexEntry made of a timestamp, config and offset as dictionary"""
-    ts = parseint64(a)
-    cid = parseint(a)
-    pos = parseint64(a)
-    return dict(timestamp=ts,config=cid,offset=pos)
-
-def makeindexentry(a):
-    """encodes the DataIndexEntry made of a timestamp, config and offset"""
-    if type(a) == tuple:
-        return struct.pack("=qiq",a[0],a[1],a[2])
-    else:
-        return struct.pack("=qiq",a["timestamp"],a["config"],a["offset"])
 
 NODE_TYPE_DEVICE = 1
 NODE_TYPE_DEPTH = 2
@@ -151,12 +138,27 @@ def parsestr(a):
     name = a.read(namelen)[0:-1]
     return name
 
+
+def makeindexentry(a):
+    """encodes the DataIndexEntry made of a timestamp, config and offset"""
+    if type(a) == tuple:
+        return struct.pack("=qiq",a[0],a[1],a[2])
+    else:
+        return struct.pack("=qiq",a["timestamp"],a["config"],a["offset"])
+
 def writeseek(a,h):
     print "writeseek",len(h["data"])
     a.seek(h["poffset"],0)
     for x in h["data"]:
         y = makeindexentry(x)
         a.write(y)
+
+def parseindexentry(a):
+    """decodes the DataIndexEntry made of a timestamp, config and offset as dictionary"""
+    ts = parseint64(a)
+    cid = parseint(a)
+    pos = parseint64(a)
+    return dict(timestamp=ts,config=cid,offset=pos)
 
 def parseseek(a,h):
     a.seek(h["poffset"],0)
@@ -166,6 +168,7 @@ def parseseek(a,h):
     print "reading seektable",n
     for i in range(0,n):
         t = parseindexentry(a)
+        t["frameid"] = i
         r.append(t)
     h["data"] = r
     return h
@@ -383,8 +386,12 @@ class Reader:
         if h0 is None:
             h0 = readhead1(self.file)
         self.h0 = h0
-        self.pseektable = None
+        self.pseektable = dict()
         self.pend = None
+    def getseektable(self,nid):
+        if nid not in self.pseektable:
+            return None
+        return parseseek(self.file,self.pseektable[nid])
     @property
     def streams(self):
         return self.nodeinfo
@@ -413,7 +420,7 @@ class Reader:
             q = self.nodeinfo[hh["nid"]]
             q["maxts"] = hh["timestamp"]
         elif h["rt"] == RECORD_SEEK_TABLE:
-            self.pseektable = h
+            self.pseektable[h["nid"]] = h
         elif h["rt"] == RECORD_END:
             self.pend = h
         return h
