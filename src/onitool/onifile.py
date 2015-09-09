@@ -331,6 +331,7 @@ class StreamInfo:
         self.mints = None # of new frame
         self.configid = 0
         self.emitted = False
+        self.removeemitted = False
 
         self.headerblock = None # ??
         self.headerdata = None # ?? 
@@ -475,6 +476,8 @@ class Writer:
             self.stats[header["nid"]].assignnodeadded(hh,hd)
 
             print "adding RECORD_NODE_ADDED to output",hh,hd
+        elif header["rt"] == RECORD_NODE_REMOVED:
+            self.stats[header["nid"]].removeemitted = True
         elif header["rt"] == RECORD_END:
             self.endemitted = True
     def addframe(self,nid,frameid,timestamp,content):
@@ -497,13 +500,22 @@ class Writer:
             if q.headerblock["nid"] == nid and not q.emitted:
                 print "writingseektable",q
                 q.writeseek(self.file) # APPENDED
-    def finalize(self):      
+    def finalize(self):              
         if not self.endemitted:
             writeend(self.file)       # APPENDED TWICE
             self.endemitted = True
+        #TODO remove device node if not emitted
+        #removed {'rt': 7, 'ps': 0, 'fs': 28, 'poffset': 368218784, 'hoffset': 368218756, 'nid': 2, 'nextheader': 368218784, 'undopos': 1873}
         for q in self.stats.values():
             if not q.emitted:
                 print "writingseektable",q
+                if not q.removeemitted:
+                    #TODO remove this if not emitted
+                    #REMOVE is EMPTY
+                    #NodeRemovedRecord record(m_pRecordBuffer, RECORD_MAX_SIZE, FALSE);
+                    #record.SetNodeID(recordedNodeInfo.nNodeID);
+                    #record.SetUndoRecordPos(recordedNodeInfo.nNodeAddedPos);                    
+                    pass
                 q.writeseek(self.file) # APPENDED
         # patch
         for q in self.stats.values():

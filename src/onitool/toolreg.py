@@ -42,16 +42,24 @@ def register(args,action,a,b):
     nidd = None
     nidc = None
     # parse all metadata and copy
+    ignore = set([oni.RECORD_NEW_DATA,oni.RECORD_END,oni.RECORD_SEEK_TABLE,oni.RECORD_NODE_REMOVED])
     while True:
         h = r.next()
         if h is None:
             break
-        elif h["rt"] == oni.RECORD_END:
-            continue
-        elif h["rt"] == oni.RECORD_SEEK_TABLE:
-            continue
         elif h["rt"] == oni.RECORD_NEW_DATA:
+            continue # otherwise no seek
+        elif h["rt"] in ignore:
+            print "ignored",h["rt"]
             continue
+        #TODO mark registered
+        #        elif h["rt"] == oni.RECORD_INT_PROPERTY:
+        #            z = oni.parseprop(a,h)
+        #            print z["name"]
+        #            if z["name"] == "registrationType":
+        #                z["data"] = 2
+        #            # TODO append block property
+        #            #w.addproperty(h,z)        else:
         else:
             w.copyblock(h,a)
     # then start iterating the frames
@@ -72,7 +80,14 @@ def register(args,action,a,b):
         a = index["times"]
         i = bisect.bisect_left(a,time)
         # time <= a[i]
-        if i == 0 or i == len(a)-1:
+        if i == 0:
+            if len(a) < 2:
+                return 0
+            else:
+                i = 1 # 0 is bad
+        if i < 2 or i >= len(a)-1:
+            if i >= len(a)-1:
+                i = len(a)-1
             return (i,index["data"][i])
         else:
             next = a[i] 
@@ -111,7 +126,7 @@ def register(args,action,a,b):
             break
 
         # skip dummy first
-        if primaryframe["offset"] == 0:
+        if primaryframe["frameid"] == 0 or secondaryframe["frameid"] == 0:
             continue
 
         for i in range(0,2): #maybe just (primaryframe,secondaryframe)
@@ -182,13 +197,14 @@ def register(args,action,a,b):
             print "\tcompressed from",xres*yres*2,"to",size
             w.addframe(idd,hc["frameid"],args.registersynctime and hc["timestamp"] or hd["timestamp"],ob[0:size]) # keep timestamp, discard frameid
             # TODO add option for faking timestamp
+
+    #TODO
+    #end
+    #removed DEVICE  --> MISSING
+    #removed IMAGE   --> 
+    #seektable IMAGE
+    #removed DEPTH   --> 
+    #seektable DEPTH
     w.finalize()
 
-#TODO mark registered
-#        elif h["rt"] == oni.RECORD_INT_PROPERTY:
-#            z = oni.parseprop(a,h)
-#            print z["name"]
-#            if z["name"] == "registrationType":
-#                z["data"] = 2
-#            # TODO append block property
-#            #w.addproperty(h,z)
+
