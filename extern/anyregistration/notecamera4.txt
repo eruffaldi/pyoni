@@ -1,0 +1,49 @@
+
+Note finali su rappresentazione omogenea ed RGBD mapping
+
+Convenzione:
+p_h3 = omogeneo 3D in z: [x y z w] => [x/z y/z 1 w/z] -- convenzione vision
+p_h4 = omogeneo 4D in w: [x y z w] => [x/w y/w z/w 1] -- conversione graphics
+p_i = image  plane pixels
+p_i4 = image plane pixels con 4 componenti
+p_w = world
+p_l1 = relativo ad un frame camera 1
+T1to2 = [R|t] matrice 4x4 da Camera 1 a Camera 2
+
+Una camera
+p_h3 = K p_w
+p_i = p_h3.xy/z
+
+Una camera con omogenea 4
+p_h4 = P K p_w
+P = [1 0 0 0; 0 1 0 0; 0 0 0 1; 0 0 1 0]; % mappa w->z e z->w
+p_i = p_h4.xy/p_h4.w
+p_i4 = p_h4/p_h4.w
+
+Inversione per una camera
+p_w = inv[K] inv[P] p_h4
+p_w = inv[K] p_h3
+
+Mappatura su altra camera in h3
+p1_w = inv[K1] p1_h3
+p2_h3 = K2 T inv[K1] inv[P] T1to2 inv[K1] p1_h3
+Nel caso RGBD la p1_h3 = [x y z]
+
+Mappatura su altra camera in h4
+p1_w = inv[K1] inv[P] p1_h4
+p2_h4 = P K2 T inv[K1] inv[P] T1to2 inv[K1] inv[P] p1_h4
+
+Nel caso Depth camera:
+p1_i4 = [x y 1/p_l1.z 1]
+p1_h4 = p1_i4*z
+
+Codice per h3: camera 1 depth, camera 2 rgb
+Eigen::Matrix4d depth2rgb4 = orgb_matrix * rototranslationD2R * odepth_matrix.inverse();
+Eigen::Vector4d psd(x, y, 1.0, 1.0/depth_value);
+Eigen::Vector4d rgb_img_homo = depth2rgb4 * (psd * depth_value);
+Eigen::Vector4d rgb_img = rgb_img_homo / rgb_img_homo.z();
+
+
+
+Ema
+
