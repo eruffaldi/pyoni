@@ -6,9 +6,43 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <iostream>
 #include <fstream>
+#include <chrono>
+
+template <class T=std::chrono::high_resolution_clock>
+class TimerT
+{
+public:
+	TimerT() : start(T::now()) {}
+	void stop() { end = T::now(); }
+    std::chrono::time_point<T> start, end;
+
+    double us() const 
+    {
+    	 return std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+    }
+};
+
+using Timer = TimerT<>;
+
+template <class T>
+std::ostream & operator << (std::ostream & ons, const TimerT<T> & x)
+{
+	ons << x.us() << "us";
+	return ons;
+}
 
 
 using namespace libfreenect2;
+
+#include <turbojpeg.h>
+
+void decodejpeg(const uint8_t * input, int inputsize, int w, int h, uint8_t * output, int format = TJPF_BGRX)
+{
+tjhandle decompressor = tjInitDecompress();
+int r = tjDecompress2(decompressor, (uint8_t*)input, inputsize, output, w, w * tjPixelSize[format], h, format, 0);
+tjDestroy(decompressor) ;
+}
+
 
 
 template <class T>
@@ -109,32 +143,112 @@ rgb_p.my_x0y0 = color_my_x0y0;
 
 }
 
-int make3D(cv::Mat & out, cv::Mat & indepth, cv::Mat & incolor, const Freenect2Device::IrCameraParams & depth_p)
+#if 0
+// Alternative lookup based
+  void createLookup(size_t width, size_t height)
+  {
+    const float fx = 1.0f / cameraMatrixColor.at<double>(0, 0);
+    const float fy = 1.0f / cameraMatrixColor.at<double>(1, 1);
+    const float cx = cameraMatrixColor.at<double>(0, 2);
+    const float cy = cameraMatrixColor.at<double>(1, 2);
+    float *it;
+
+    lookupY = cv::Mat(1, height, CV_32F);
+    it = lookupY.ptr<float>();
+    for(size_t r = 0; r < height; ++r, ++it)
+    {
+      *it = (r - cy) * fy;
+    }
+
+    lookupX = cv::Mat(1, width, CV_32F);
+    it = lookupX.ptr<float>();
+    for(size_t c = 0; c < width; ++c, ++it)
+    {
+      *it = (c - cx) * fx;
+    }
+  }
+
+     const float badPoint = std::numeric_limits<float>::quiet_NaN();
+
+    #pragma omp parallel for
+    for(int r = 0; r < depth.rows; ++r)
+    {
+      pcl::PointXYZRGBA *itP = &cloud->points[r * depth.cols];
+      const uint16_t *itD = depth.ptr<uint16_t>(r);
+      const cv::Vec3b *itC = color.ptr<cv::Vec3b>(r);
+      const float y = lookupY.at<float>(0, r);
+      const float *itX = lookupX.ptr<float>();
+
+      for(size_t c = 0; c < (size_t)depth.cols; ++c, ++itP, ++itD, ++itC, ++itX)
+      {
+        register const float depthValue = *itD / 1000.0f;
+        // Check for invalid measurements
+        if(isnan(depthValue) || depthValue <= 0.001)
+        {
+          // not valid
+          itP->x = itP->y = itP->z = badPoint;
+          itP->rgba = 0;
+          continue;
+        }
+        itP->z = depthValue;
+        itP->x = *itX * depthValue;
+        itP->y = y * depthValue;
+        itP->b = itC->val[0];
+        itP->g = itC->val[1];
+        itP->r = itC->val[2];
+        itP->a = 255;
+      }
+    }
+#endif
+
+std::pair<cv::Mat,cv::Mat> preparemake3D(int w, int h, const Freenect2Device::IrCameraParams & depth_p)
 {
-	int good = 0;
+	cv::Mat m1(w,1,CV_32FC1);
+	cv::Mat m2(h,1,CV_32FC1);
+	float * pm1 = (float*)m1.data;
+	float * pm2 = (float*)m2.data;
+	for(int i = 0; i < w; i++)
+	{
+		*pm1++ = (i-depth_p.cx+0.5)/depth_p.fx;
+	}
+	for (int i = 0; i < h; i++)
+	{
+		*pm2++ = (i-depth_p.cy+0.5)/depth_p.fy;
+	}
+	return {m1,m2};
+}
+
+int make3D(cv::Mat & out, cv::Mat & indepth, cv::Mat & incolor, std::pair<cv::Mat,cv::Mat> pp)
+{
+		int good = 0;
 	std::cout << "make 3D with cut at distance\n";
 	uint8_t * pc = (uint8_t *)incolor.data;
 	float * pd = (float*)indepth.data;
 	uint8_t * poi = (uint8_t*)out.data;
+	float * pw = (float*)pp.first.data;
+	float * ph = (float*)pp.second.data;
 	for(int r = 0; r < indepth.rows; r++)
 	{
+		const float w = ph[r];
 		for(int c = 0; c < indepth.cols; c++, pc+=3,pd++)
 		{
 			auto po = (float*)poi;
 			float z = *pd;
-			if(z <= 0 || z > 3000)
+			if(z <= 0 || z > 3000 || (pc[0] == 0 && pc[1] == 0 && pc[2] == 0))
 			{
 			}
 			else
 			{
 				// xpix = (fx*xworld+cx*z)/z
 				// xworld = (xpix*z-cx*z)/fx
-				const float rx = (c-depth_p.cx)*z/depth_p.fx;
-				const float ry = (r-depth_p.cy)*z/depth_p.fy;
-				po[0] = rx;
-				po[1] = ry;
-				po[2] = z;
+				//
+				// Apply 
 				auto poc = (uint8_t*)(po+3);
+				const float rx = pw[c]*z;
+				const float ry = w*z;
+				po[0] = rx;
+				po[1] = -ry;
+				po[2] = z;
 				poc[0] = pc[2];
 				poc[1] = pc[1];
 				poc[2] = pc[0];
@@ -144,6 +258,89 @@ int make3D(cv::Mat & out, cv::Mat & indepth, cv::Mat & incolor, const Freenect2D
 
 		}
 	}
+	std::cout << good << std::endl;
+	return good;
+}
+
+int make3D(cv::Mat & out, cv::Mat & indepth, cv::Mat & incolor, const Freenect2Device::IrCameraParams & depth_p)
+{
+	int good = 0;
+	std::cout << "make 3D with cut at distance\n";
+	uint8_t * pc = (uint8_t *)incolor.data;
+	float * pd = (float*)indepth.data;
+	uint8_t * poi = (uint8_t*)out.data;
+	for(int r = 0; r < indepth.rows; r++)
+	{
+		const float w = (r-depth_p.cy+0.5)/depth_p.fy;
+		for(int c = 0; c < indepth.cols; c++, pc+=3,pd++)
+		{
+			auto po = (float*)poi;
+			float z = *pd;
+			if(z <= 0 || z > 3000 || (pc[0] == 0 && pc[1] == 0 && pc[2] == 0))
+			{
+			}
+			else
+			{
+				// xpix = (fx*xworld+cx*z)/z
+				// xworld = (xpix*z-cx*z)/fx
+				//
+				// Apply 
+				auto poc = (uint8_t*)(po+3);
+				const float rx = (c-depth_p.cx+0.5)*z/depth_p.fx;
+				const float ry = w*z;
+				po[0] = rx;
+				po[1] = -ry;
+				po[2] = z;
+				poc[0] = pc[2];
+				poc[1] = pc[1];
+				poc[2] = pc[0];
+				good++;
+				poi += 3*4+3;
+			}
+
+		}
+	}
+	std::cout << good << std::endl;
+	return good;
+}
+
+int make3D4(cv::Mat & out, cv::Mat & indepth, cv::Mat & incolor, const Freenect2Device::IrCameraParams & depth_p)
+{
+	int good = 0;
+	std::cout << "make 3D with cut at distance\n";
+	uint32_t * pc = (uint32_t *)incolor.data;
+	float * pd = (float*)indepth.data;
+	uint8_t * poi = (uint8_t*)out.data;
+	for(int r = 0; r < indepth.rows; r++)
+	{
+		const float w = (r-depth_p.cy)/depth_p.fy;
+		for(int c = 0; c < indepth.cols; c++, pc++,pd++)
+		{
+			auto po = (float*)poi;
+			float z = *pd;
+			if(z <= 0 || z > 3000 || (pc[0] == 0))
+			{
+			}
+			else
+			{
+				// xpix = (fx*xworld+cx*z)/z
+				// xworld = (xpix*z-cx*z)/fx
+				//
+				// Apply 
+				auto poc = (uint32_t*)(po+3);
+				const float rx = (c-depth_p.cx)*z/depth_p.fx;
+				const float ry = w*z;
+				po[0] = rx;
+				po[1] = -ry;
+				po[2] = z;
+				poc[0] = pc[0];
+				good++;
+				poi += 3*4+4;
+			}
+
+		}
+	}
+	std::cout << good << std::endl;
 	return good;
 }
 
@@ -157,6 +354,14 @@ void saveply(const char * name, const cv::Mat & p3, int good, int item)
 	onf << "end_header" << std::endl;
 	onf.write((const char*)p3.data,good*item);
 
+}
+
+inline std::streampos filesize(std::istream & inf)
+{
+    inf.seekg( 0, std::ios::end );
+    std::streampos n = inf.tellg();
+    inf.seekg( 0, std::ios::beg );
+    return n;
 }
 
 void makepaths(std::string &d, std::string &c,std::string b, int fid)
@@ -180,9 +385,11 @@ int main(int argc, char * argv[])
 	// void apply(const Frame* rgb, const Frame* depth, Frame* undistorted, Frame* registered, const bool enable_filter = true, Frame* bigdepth = 0) const;
 	std::array<int,2> rgbsize({1920,1080}),depthsize({512,424});
 	FrameT<int32_t> colorin(rgbsize);
+	FrameT<uint8_t> grayin(rgbsize);
 	FrameT<float> depthin(depthsize);
 	FrameT<float> undistorted(depthsize);
-	FrameT<int32_t> registered(depthsize);
+	FrameT<int32_t> registeredgray(depthsize);
+	FrameT<uint8_t> registered(depthsize);
 	FrameT<rgb_t> registered3(depthsize);
 	FrameT<rgb_t> colorin3(rgbsize);
 	FrameT<float> bigdepth(r.getbigfiltermapsize(),1);
@@ -197,9 +404,46 @@ int main(int argc, char * argv[])
 	makepaths(fdepth,fcolor,base,fid);
 	std::cout << fdepth << " " << fcolor << std::endl;
 
-	cv::Mat mcolor = cv::imread(fcolor.c_str(),CV_LOAD_IMAGE_COLOR);
-	cv::Mat mdepth = cv::imread(fdepth.c_str(),CV_LOAD_IMAGE_UNCHANGED);
+	auto dump = [] (const cv::Mat & x, const char * cp) {
+		std::cout << cp << " " << x.rows << " " << x.cols << " elemsize:" << x.elemSize() << " channels " << x.channels() << " flags " << x.flags << " data " << (void*)x.data << std::endl;
+	};
+	Timer tloadj;
+	cv::Mat micolor = cv::imread(fcolor.c_str(),CV_LOAD_IMAGE_COLOR);
+	dump(micolor,"micolor");
+	tloadj.stop();
+	Timer tloadt;
+	{
+		std::ifstream inf(fcolor.c_str(),std::ios::binary);
+		int n = filesize(inf);
+		std::vector<uint8_t> data(n);
+		inf.read((char*)&data[0],n);
+		std::cout << "loaded file as " << n << std::endl;
 
+		decodejpeg(&data[0],data.size(),1920,1080,micolor.data,TJPF_BGR);
+	}
+	tloadt.stop();
+
+	Timer tloadt1;
+	cv::Mat micolorg(depthsize[1], depthsize[0], CV_8UC1, grayin.data);
+	{
+		std::ifstream inf(fcolor.c_str(),std::ios::binary);
+		int n = filesize(inf);
+		std::vector<uint8_t> data(n);
+		inf.read((char*)&data[0],n);
+		std::cout << "gray loaded file as " << n << std::endl;
+
+		decodejpeg(&data[0],data.size(),1920,1080,micolorg.data,TJPF_GRAY);
+	}
+	tloadt1.stop();
+
+	Timer tloadd;
+	cv::Mat midepth = cv::imread(fdepth.c_str(),CV_LOAD_IMAGE_UNCHANGED);
+	tloadd.stop();
+	cv::Mat mcolor=micolor,mdepth=midepth;
+//	cv::flip(micolor,mcolor,0);
+//	cv::flip(midepth,mdepth,0);
+
+	Timer trest;
 	cv::Mat mdepthf(depthsize[1], depthsize[0], CV_32FC1, depthin.data);
 	cv::Mat mcolor3(rgbsize[1], rgbsize[0], CV_8UC3, colorin3.data);
 	cv::Mat mcolor4(rgbsize[1], rgbsize[0], CV_8UC4, colorin.data);
@@ -208,9 +452,6 @@ int main(int argc, char * argv[])
 	cv::Mat mundout(depthsize[1], depthsize[0], CV_32FC1, undistorted.data);
 	cv::Mat mout3d(depthsize[1],depthsize[0]*(3*4+3),CV_8UC1);
 
-	auto dump = [] (const cv::Mat & x, const char * cp) {
-		std::cout << cp << " " << x.rows << " " << x.cols << " elemsize:" << x.elemSize() << " channels " << x.channels() << " flags " << x.flags << " data " << (void*)x.data << std::endl;
-	};
 	dump(mcolor,"mcolor");
 	dump(mcolor4,"mcolor4");
 	dump(mdepth,"mdepth");
@@ -252,20 +493,54 @@ int main(int argc, char * argv[])
 
 	std::cout << "registering\n";
 	mcolor.copyTo(mcolor3);
-//	if(!r.apply(&colorin,&depthin,&undistorted,&registered,true,&bigdepth))
+
+	Timer tapp1;
+		if(!r.apply1(&grayin,&depthin,&undistorted,&registeredgray,true,&bigdepth))
+		{
+			std::cout<<"apply1 fail\n";
+		}
+	tapp1.stop();
+
+	Timer tapp4;
+	if(!r.apply4(&colorin,&depthin,&undistorted,&registered,true,&bigdepth))
+		{
+			std::cout<<"apply4 fail\n";
+		}
+	tapp4.stop();
+
+	trest.stop();
+	Timer tapp3;
 	if(!r.apply3(&colorin3,&depthin,&undistorted,&registered3,true,&bigdepth))
 	{
-		std::cout << "reg failed\n";
+		std::cout << "apply3 failed\n";
 	}
 	else
 	{
+		tapp3.stop();
 		std::cout << "registered\n";
 		cv::imshow("colorout",mcolorout3);
 		//cv::imshow("undi",mundout);
 		//cv::waitKey();
 	}
+	Timer t3d;
 	int good = make3D(mout3d,mundout,mcolorout3,depth_p);
+	t3d.stop();
+	auto pp = preparemake3D(524,484,depth_p);
+	Timer t3dt;
+	 good = make3D(mout3d,mundout,mcolorout3,pp);
+	t3dt.stop();
 	saveply("x.ply",mout3d,good,(3*4+3));
+
+	std::cout << "loadj " << tloadj << std::endl;
+	std::cout << "loadt1 " << tloadt1 << std::endl;
+	std::cout << "loadt " << tloadt << std::endl;
+	std::cout << "loadd " << tloadd << std::endl;
+	std::cout << "prep " << trest << std::endl;
+	std::cout << "reg4 " << tapp4 << std::endl;
+	std::cout << "reg3 " << tapp3 << std::endl;
+	std::cout << "reg1 " << tapp1 << std::endl;
+	std::cout << "make3D " << t3d << std::endl;
+	std::cout << "make3Dt " << t3dt << std::endl;
 
 	// TODO: unprojection of the point to 3D using the depth parameters and 
 	//
