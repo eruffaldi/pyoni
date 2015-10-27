@@ -107,7 +107,7 @@ public:
 
   bool apply1(const Frame* rgb, const Frame* depth, Frame* undistorted, Frame* registered, const bool enable_filter = true, Frame* bigdepth = 0) const;
 
-private:
+public:
   void distort(int mx, int my, float& dx, float& dy) const;
   void depth_to_color(float mx, float my, float& rx, float& ry) const;
 
