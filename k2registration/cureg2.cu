@@ -63,6 +63,11 @@ struct registerxy2
         depth_data_(thrust::raw_pointer_cast(&depth_data[0]))
                 {}
 
+    __host__ __device__ 
+    registerxy2(const thrust::host_vector<float> & depth_data) :
+        depth_data_(thrust::raw_pointer_cast(&depth_data[0]))
+                {}
+
     __host__ __device__
     thrust::tuple<float,int> operator()(thrust::tuple<int,float,float> t)
     {
@@ -106,6 +111,28 @@ struct registerxy2
 //     selDist = bufferSelDist filled by project
 // in/out:    
 //     rendered via idx = bufferRegistered[sizeRegistered] = 
+
+/*
+Without binning
+
+fatomicMin(&(depthbuffer[dbindex].depthPrimTag),frag.depthPrimTag);
+
+                            if(frag.depthPrimTag == depthbuffer[dbindex].depthPrimTag)//If this is true, we won the race condition
+                                writeToDepthbuffer(x,y,frag, depthbuffer,resolution);
+
+__device__ unsigned long long int fatomicMin(unsigned long long int  * addr, unsigned long long int value)
+{
+    unsigned long long ret = *addr;
+    while(value < ret)
+    {
+        unsigned long long old = ret;
+        if((ret = atomicCAS(addr, old, value)) == old)
+            break;
+    }
+    return ret;
+
+}                                
+*/
 
 int main(void)
 {
