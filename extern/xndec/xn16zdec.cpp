@@ -26,10 +26,17 @@ typedef signed short XnInt16;
 		{												\
 			return (XN_STATUS_OUTPUT_BUFFER_OVERFLOW);	\
 		}
+
+#ifdef __MINGW32__
+#define DE __declspec(dllexport)
+#else
+#define DE
+#endif
 extern "C"
 {
-
-	XnStatus XnStreamUncompressConf4(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
+	void DE initlibxndec() 
+	{}
+	XnStatus DE XnStreamUncompressConf4(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 {
 	// Local function variables
 	const XnUInt8* pInputEnd = pInput + nInputSize;
@@ -79,7 +86,7 @@ extern "C"
 	return (XN_STATUS_OK);
 }
 
-	XnStatus XnStreamUncompressImage8Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
+	XnStatus DE XnStreamUncompressImage8Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 {
 	const XnUInt8* pInputEnd = pInput + nInputSize;
 	const XnUInt8* pOrigOutput = pOutput;
@@ -200,7 +207,7 @@ extern "C"
 }
 
 
-XnStatus XnStreamUncompressDepth16Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
+XnStatus DE XnStreamUncompressDepth16Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
 {
 	// Local function variables
 	const XnUInt8* pInputEnd = pInput + nInputSize;
@@ -342,7 +349,7 @@ XnStatus XnStreamUncompressDepth16Z(const XnUInt8* pInput, const XnUInt32 nInput
 	return (XN_STATUS_OK);
 }
 
-XnStatus XnStreamUncompressDepth16ZWithEmbTable(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
+XnStatus DE XnStreamUncompressDepth16ZWithEmbTable(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
 {
 	// Local function variables
 	const XnUInt8* pInputEnd = pInput + nInputSize;
@@ -493,7 +500,7 @@ XnStatus XnStreamUncompressDepth16ZWithEmbTable(const XnUInt8* pInput, const XnU
 	return (XN_STATUS_OK);
 }
 
-XnStatus XnStreamCompressDepth16Z(const XnUInt16* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
+XnStatus DE XnStreamCompressDepth16Z(const XnUInt16* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 {
 	// Local function variables
 	const XnUInt16* pInputEnd = pInput + (nInputSize / sizeof(XnUInt16));
@@ -634,7 +641,7 @@ XnStatus XnStreamCompressDepth16Z(const XnUInt16* pInput, const XnUInt32 nInputS
 	return (XN_STATUS_OK);
 }
 
-XnStatus XnStreamCompressDepth16ZWithEmbTable(const XnUInt16* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize, XnUInt16 nMaxValue)
+XnStatus DE XnStreamCompressDepth16ZWithEmbTable(const XnUInt16* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize, XnUInt16 nMaxValue)
 {
 	// Local function variables
 	const XnUInt16* pInputEnd = pInput + (nInputSize / sizeof(XnUInt16));
@@ -800,7 +807,7 @@ XnStatus XnStreamCompressDepth16ZWithEmbTable(const XnUInt16* pInput, const XnUI
 	return (XN_STATUS_OK);
 }
 
-XnStatus XnStreamCompressImage8Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
+XnStatus DE XnStreamCompressImage8Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 {
 	// Local function variables
 	const XnUInt8* pInputEnd = pInput + nInputSize;
@@ -937,7 +944,7 @@ XnStatus XnStreamCompressImage8Z(const XnUInt8* pInput, const XnUInt32 nInputSiz
 	return (XN_STATUS_OK);
 }
 
-XnStatus XnStreamCompressConf4(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
+XnStatus DE XnStreamCompressConf4(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 {
 	// Local function variables
 	const XnUInt8* pInputEnd = pInput + nInputSize;

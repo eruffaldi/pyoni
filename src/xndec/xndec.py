@@ -1,14 +1,23 @@
 
 
-import ctypes
+import ctypes,os
 
 # XnStatus XnStreamUncompressDepth16ZWithEmbTable(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
 # XnStatus XnStreamUncompressDepth16Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
 # XnStatus XnStreamUncompressImage8Z(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 # XnStatus XnStreamUncompressConf4(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt8* pOutput, XnUInt32* pnOutputSize)
 
+types = ["",".so",".dylib",".pyd"]
+x = None
+path = os.path.abspath(__file__)
+dir_path = os.path.dirname(path)
 
-x = ctypes.CDLL("libxndec.dylib")
+for a in types:
+	try:
+		x = ctypes.CDLL(os.path.join(dir_path,"libxndec" + a))
+		break
+	except:
+		pass
 f = x.XnStreamUncompressDepth16ZWithEmbTable
 et = ctypes.POINTER(ctypes.c_uint8)
 f.argtypes = [ctypes.c_char_p,ctypes.c_int,ctypes.POINTER(ctypes.c_uint16),ctypes.POINTER(ctypes.c_int)]

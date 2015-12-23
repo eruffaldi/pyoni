@@ -34,10 +34,18 @@ void composerotot(Eigen::Matrix4d& out, const Eigen::Matrix3d & R, const Eigen::
 
 }
 
+#ifdef __MINGW32__
+#define DE __declspec(dllexport)
+#else
+#define DE
+
+#endif
+
 extern "C"
 {
+	void DE initlibanyregistration(){}
 	/// output is color computed as depth in sizes 
-	void register2color(char * outrgb, int cw, int ch, const char * rgb, int dw, int dh, const uint16_t * depth, const double depthK[9], const double colorK[9], const double inrotation[9], const double position[3])
+	void DE register2color(char * outrgb, int cw, int ch, const char * rgb, int dw, int dh, const uint16_t * depth, const double depthK[9], const double colorK[9], const double inrotation[9], const double position[3])
 	{	
 		static_assert(sizeof(rgbpoint) == 3,"rgpoint should be 3 bytes");
 
@@ -73,7 +81,7 @@ extern "C"
 		rgbpoint * out = (rgbpoint*)outrgb;
 		const rgbpoint * inputcolor = (rgbpoint*)rgb;
 
-		memset(out,dw*dw*3,0);
+		memset(out,0,dw*dh*3);
 
 		for(int y = 0; y < dh; ++y)
 		{	
@@ -112,7 +120,7 @@ extern "C"
 
 	// NOT WORKING DUE TO FILLING
 	/// output is depth computed as color in size
-	void register2depth(uint16_t * outdepth, int cw, int ch, const char * rgb, int dw, int dh, const uint16_t * depth, const double depthK[9], const double colorK[9], const double inrotation[9], const double position[3])
+	void DE register2depth(uint16_t * outdepth, int cw, int ch, const char * rgb, int dw, int dh, const uint16_t * depth, const double depthK[9], const double colorK[9], const double inrotation[9], const double position[3])
 	{	
 		float maxdistance = 10;
 

@@ -1,7 +1,6 @@
 
-import ctypes,sys,png,array
+import ctypes,sys,png,array,os
 from PIL import Image
-
 
 #	void register2color(char * outrgb, int cw, int ch, const char * rgb, int dw, int dh, const uint16_t * depth, const double depthK[9], const double colorK[9], const double inrotation[9], const double position[3])
 #	void register2depth(uint16_t * outdepth, int cw, int ch, const char * rgb, int dw, int dh, const uint16_t * depth, const double depthK[9], const double colorK[9], const double inrotation[9], const double position[3])
@@ -16,7 +15,18 @@ ad16 = ctypes.c_double * 16 # for affine
 
 ci = ctypes.c_int;
 
-x = ctypes.CDLL("libanyregistration.dylib")
+types = ["",".so",".dylib",".pyd"]
+x = None
+path = os.path.abspath(__file__)
+dir_path = os.path.dirname(path)
+
+for a in types:
+	try:
+		x = ctypes.CDLL(os.path.join(dir_path,"libanyregistration" + a))
+		break
+	except:
+		pass
+
 f = x.register2color
 f.argtypes = [p8,ci,ci,p8,ci,ci,p16,ad9,ad9,ad9,ad3]
 register2color = f

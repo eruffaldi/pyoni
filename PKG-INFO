@@ -1,0 +1,42 @@
+Metadata-Version: 1.1
+Name: pyoni
+Version: 0.5
+Summary: pyoni is a Python tool for manipulating OpenNI data files
+Home-page: https://github.com/eruffaldi/pyoni
+Author: Emanuele Ruffaldi
+Author-email: emanuele.ruffaldi@gmail.com
+License: http://www.apache.org/licenses/LICENSE-2.0
+Description: 
+
+        Installation
+        ------------
+        
+        **Automatic installation**::
+        
+            pip install pyoni
+        
+        Tornado is listed in `PyPI <http://pypi.python.org/pypi/pyoni/>`_ and
+        can be installed with ``pip`` or ``easy_install``.  
+        
+        **Manual installation**: Download the latest source from `PyPI
+        <http://pypi.python.org/pypi/pyoni/>`_.
+        
+        .. parsed-literal::
+        
+            tar xvzf pyoni-$VERSION.tar.gz
+            cd pyoni-$VERSION
+            python setup.py build
+            sudo python setup.py install
+        
+        The PyOni source code is `hosted on GitHub
+        <https://github.com/eruffaldi/pyoni>`_.
+        
+        **Prerequisites**: Pyoni runs on Python 2.7.  
+        Some Pyoni features may require a working C++ compiler for building the native parts
+        
+        **Platforms**: PyOni is developed on OSX and tested under Linux and Windows
+        
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.7

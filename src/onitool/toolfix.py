@@ -2,11 +2,11 @@ from . import onifile as oni
 import struct
 
 def fix(args,action,a):
-	r = oni.Patcher(a)
-	last = None
-	prelast = None	
-	mid = -1
-	needclose = False
+    r = oni.Patcher(a)
+    last = None
+    prelast = None	
+    mid = -1
+    needclose = False
     print "fileheader",r.h0
     while True:
         h = r.next()
@@ -15,7 +15,7 @@ def fix(args,action,a):
         elif h["rt"] == oni.RECORD_NEW_DATA:
             break
         if mid < h["nid"]:
-        	mid = h["nid"]
+            mid = h["nid"]
         prelast = last
         last = h
         if h["rt"] == oni.RECORD_NEW_DATA:
