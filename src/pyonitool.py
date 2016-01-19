@@ -63,6 +63,7 @@ if __name__ == "__main__":
     parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
     parser.add_argument('--stripcolor',action="store_true")
     parser.add_argument('--stripdepth',action="store_true")
+    parser.add_argument('--extractframes',type=str,help="extract frames from the given file, requires,")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--no-registersynctime',dest="registersynctime",action="store_false",help="no sync times while registering")
     parser.add_argument('--registercolor',action="store_true",help="registers color over depth (output is depth size)")
@@ -76,6 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('--skipframes',type=int,default=None,help="skip n frames")
     parser.add_argument('--coloreddepth',action="store_true",help="colored depth")
     parser.add_argument('--output')
+    parser.add_argument('--outputdir')
     #parser.add_argument('--extractboth',help="extract the depth and color stream as png and jpeg respectively. This option specifies the target path, numbering is the frame number")
     parser.add_argument('--cutbytime',help="cut by specifing time in seconds: startseconds,endseconds",type=lambda x:interval(x,"time",float))
     parser.add_argument('--cutbyframe',help="cut by specifing time in frames: startframe,endframe",type=lambda x:interval(x,"frame",int))
@@ -193,6 +195,15 @@ if __name__ == "__main__":
         target = ("timeus",[int(x*1E6) for x in args.cutbyframe])
         action = "cutbytime"
 
+    if args.extractframes:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.outputdir == "":
+            print "output dir needed for extractframes"
+            sys.exit(-1)
+        action = "extractframes"
+
 
 
     subaction = ""
@@ -288,6 +299,8 @@ if __name__ == "__main__":
         toolinfo.times(args,a)
     elif action == "info":
         toolinfo.info(args,a)
+    elif action == "extractframes":
+        toolext.extractframes(args,a,[int(x) for x in open(args.extractframes,"r")],args.outputdir)
     elif action == "dump" or action == "":
         toolinfo.dump(args,a)
     else:
