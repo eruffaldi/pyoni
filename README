@@ -71,8 +71,15 @@ Build
 
 Two C++ codes require manual steps using cmake and then the resulting shared libraries needs to be visible to python at startup (PATH under Windows, LD_LIBRARY_PATH under Linux, DYLD_LIBRARY_PATH under OSX)
 
-extern/xndec
-extern/anyregistration
+1) make sure that Eigen3 is available http://eigen.tuxfamily.org
+2) go top level
+3) mkdir build
+   cd build
+   cmake ..
+4) make
+5) make the output DLL/SO visible
+
+In the next version I will package everything 
 
 References
 =======================
