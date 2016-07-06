@@ -59,6 +59,8 @@ def dump(args,a):
             print "nodeadded",h["nid"],h,oni.parseadded(a,h)
         elif h["rt"] == oni.RECORD_INT_PROPERTY:
             print "intprop",h["nid"],oni.parseprop(a,h)
+        elif h["rt"] == oni.RECORD_REAL_PROPERTY:
+            print "realprop",h["nid"],oni.parseprop(a,h)
         elif h["rt"] == oni.RECORD_GENERAL_PROPERTY:
             pp = oni.parseprop(a,h)
             print "genprop",h["nid"],pp

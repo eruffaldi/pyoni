@@ -1,5 +1,59 @@
 from . import onifile as oni
+from . import D2S as tables
 import struct
+from collections import defaultdict
+
+def fixnite(args,action,a,b):
+    r = oni.Reader(a)
+    w = oni.Writer(b,r.h0)
+    ctargetnid = None
+    emitted = False
+    foundprop = set()
+    neededprop = dict(ParamCoeff=4,RegistrationType=0,ConstShift=200,ShiftScale=10,MaxShift=2047,ZPD=120,ZPPS=0.10520000010728836,D2S="",S2D="",LDDIS=7.5,Gain=42,MaxDepthValue=10000)
+    if args.registered != -1:
+        neededprop["RegistrationType"] = args.registered
+        #XN_STREAM_PROPERTY_REGISTRATION_TYPE = 0x10801005, // "RegistrationType"
+    # Check DepthStream.hpp 
+    # Not patched above
+    while True:
+        h = r.next()
+        if h is None:
+            break
+        if ctargetnid is not None and h["nid"] != ctargetnid and not emitted:
+            # inject ParamCoeff = 4 for depth
+            for k,v in neededprop.iteritems():
+                if k in foundprop:
+                    print "already present",k
+                else:
+                    print "adding property",k
+                    if k == "ZPPS" or k == "LDDIS":
+                        oni.addprop(b,ctargetnid,k,oni.RECORD_REAL_PROPERTY,v)                        
+                    elif k == "S2D":
+                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,tables.S2D().tostring())
+                    elif k == "D2S":
+                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,tables.D2S().tostring())
+                    else:
+                        oni.addprop(b,ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
+            #XN_STREAM_PROPERTY_S2D_TABLE S2D GENERAL 4096
+            #XN_STREAM_PROPERTY_D2S_TABLE D2S GENERAL 20002
+            emitted = True
+        if ctargetnid == h["nid"] and h["rt"] == oni.RECORD_INT_PROPERTY:
+            p = oni.parseprop(a,h)
+            foundprop.add(p["name"])
+        elif ctargetnid == h["nid"] and h["rt"] == oni.RECORD_GENERAL_PROPERTY:
+            p = oni.parseprop(a,h)
+            foundprop.add(p["name"])
+        if h["rt"] == oni.RECORD_NODE_ADDED:
+            hh = oni.parseadded(a,h)
+            if hh["nodetype"] == oni.NODE_TYPE_DEPTH:
+                ctargetnid = h["nid"]
+                print "found depth",ctargetnid
+            w.copyblock(h,a)
+        elif h["rt"] == oni.RECORD_SEEK_TABLE:
+            w.emitseek(h["nid"])
+        else:
+            w.copyblock(h,a)
+    w.finalize()
 
 def fix(args,action,a):
     r = oni.Patcher(a)
@@ -11,6 +65,8 @@ def fix(args,action,a):
     while True:
         h = r.next()
         if h is None:
+            break
+        elif h.magic != oni.magic:
             break
         elif h["rt"] == oni.RECORD_NEW_DATA:
             break

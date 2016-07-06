@@ -56,6 +56,8 @@ RECORD_NODE_ADDED_1_0_0_5       = 0x0C
 RECORD_NODE_ADDED               = 0x0D
 RECORD_SEEK_TABLE               = 0x0E
 
+IMAGE_REGISTRATION_OFF = 0
+IMAGE_REGISTRATION_DEPTH_TO_COLOR = 1
 """
 struct FileHeaderData
 {
@@ -112,10 +114,10 @@ def parseint(a):
     return struct.unpack("i",a.read(4))[0]
 
 def parseint64(a):
-    return struct.unpack("q",a.read(8))[0]
+    return struct.unpack("Q",a.read(8))[0]
 
 def makeint64(a):
-    return struct.pack("q",a)
+    return struct.pack("Q",a)
 
 def parsedatahead(a,h):
     """Parsed the header of the data block containing timestamp and seek table position
@@ -142,9 +144,9 @@ def parsestr(a):
 def makeindexentry(a):
     """encodes the DataIndexEntry made of a timestamp, config and offset"""
     if type(a) == tuple:
-        return struct.pack("=qiq",a[0],a[1],a[2])
+        return struct.pack("=QiQ",a[0],a[1],a[2])
     else:
-        return struct.pack("=qiq",a["timestamp"],a["config"],a["offset"])
+        return struct.pack("=QiQ",a["timestamp"],a["config"],a["offset"])
 
 def writeseek(a,h):
     print "writeseek",len(h["data"])
@@ -186,7 +188,7 @@ def writedadded(a,h,hh):
     #print "codecback",codec2id.get(hh["codec"],hh["codec"])
     ocodec = codec2id.get(hh["codec"],hh["codec"])
     print h,hh
-    a.write(struct.pack("=iiiqqq",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"],hh["seektable"]))
+    a.write(struct.pack("=iiiQQQ",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"],hh["seektable"]))
 def parseadded(a,h):
     a.seek(h["poffset"],0)
     name = parsestr(a)
@@ -216,8 +218,34 @@ def parseprop(a,h):
     datalen = parseint(a)-4
     data = a.read(datalen)
     if h["rt"] == RECORD_INT_PROPERTY:
-        data = struct.unpack("i",data)[0]    
+        if len(data) == 8:
+            data = struct.unpack("q",data)[0]
+        else:
+            data = struct.unpack("i",data)[0]
+    elif h["rt"] == RECORD_REAL_PROPERTY:    
+        if len(data) == 8:
+            data = struct.unpack("d",data)[0]
+        else:
+            data = struct.unpack("f",data)[0]
     return dict(name=name,data=data)
+
+def addprop(a,nid,name,type,value):
+    if type == RECORD_INT_PROPERTY:      
+        c = makestr(name) + struct.pack("=ii",4+4,value)
+        writehead(a,dict(rt=type,nid=nid,ps=0,fs=HEADER_SIZE+len(c),undopos=0))
+        a.write(c)
+    elif type == RECORD_GENERAL_PROPERTY:
+        c = makestr(name) + struct.pack("=i",4+4) + value
+        writehead(a,dict(rt=type,nid=nid,ps=0,fs=HEADER_SIZE+len(c),undopos=0))
+        a.write(c)        
+    elif type == RECORD_REAL_PROPERTY:      
+        c = makestr(name) + struct.pack("=if",4+4,value)
+        writehead(a,dict(rt=type,nid=nid,ps=0,fs=HEADER_SIZE+len(c),undopos=0))
+        a.write(c)
+    else:
+        print "prop type unsupported",type
+        sys.exit(-1)
+
 
 def writeprop(a,h,z):
     a.seek(h["poffset"],0)
@@ -226,6 +254,7 @@ def writeprop(a,h,z):
         a.write(c)
     else:
         print "prop type unsupported",h,z
+        sys.exit(-1)
 
 
 def emptyhead1():
@@ -235,7 +264,7 @@ def writehead1(a,h):
     """writes a new header"""
     a.seek(0)
     version = struct.pack("bbhi",*h["version"])
-    ts = struct.pack("q",h["ts"])
+    ts = struct.pack("Q",h["ts"])
     maxnodeid = struct.pack("i",h["maxnid"])
     a.write(h["magic"]+version+ts+maxnodeid)
 
@@ -243,7 +272,7 @@ def readhead1(a):
     """read the main file header"""
     magic = a.read(HEADER_MAGIC_SIZE)
     version = struct.unpack("bbhi",a.read(2+2+4))
-    ts = struct.unpack("q",a.read(8))[0]
+    ts = struct.unpack("Q",a.read(8))[0]
     maxnodeid = struct.unpack("i",a.read(4))[0]
     if magic != RHMAGIC:
             print "bad magic",magic
@@ -256,7 +285,7 @@ def readhead1(a):
 def writeend(a):
     """writes the end record"""
     w = (MAGIC,0x0B,0,HEADER_SIZE,0)
-    a.write(struct.pack("5i",*w)+struct.pack("q",0))
+    a.write(struct.pack("5i",*w)+struct.pack("Q",0))
 
 def copyblock(a,h,b,frame=None,timestamp=None):
     a.seek(h["poffset"],0)
@@ -286,7 +315,7 @@ def copyblock(a,h,b,frame=None,timestamp=None):
     return hout
 
 def writehead(a,h):
-    a.write(struct.pack("5i",MAGIC,h["rt"],h["nid"],h["fs"],h["ps"]) + struct.pack("q",h["undopos"]))
+    a.write(struct.pack("5i",MAGIC,h["rt"],h["nid"],h["fs"],h["ps"]) + struct.pack("Q",h["undopos"]))
 
 def readrechead(a):
     """read record: the resulting dictionary contains:
@@ -314,7 +343,8 @@ def readrechead(a):
     magic,rt,nid,fs,ps,undopos= struct.unpack("=5iq",h1)
     if magic != MAGIC:
             print "bad magic record",magic
-    r = dict(rt=rt,nid=nid,fs=fs,ps=ps,poffset=a.tell(),hoffset=p,nextheader=p+ps+fs,undopos=undopos)
+            return None
+    r = dict(rt=rt,nid=nid,fs=fs,ps=ps,poffset=a.tell(),hoffset=p,nextheader=p+ps+fs,undopos=undopos,magic=magic)
     return r
 
 
@@ -402,7 +432,7 @@ class Reader:
             self.file.seek(self.lasth["nextheader"])
         h = readrechead(self.file)
         self.lasth = h
-        if h is None:
+        if h is None or h["magic"] == 0:
             return None
         if h["rt"] == RECORD_NEW_DATA:
             pass
@@ -466,12 +496,13 @@ class Writer:
         po = self.file.tell() # save output location
         self.file.write(d) # content fs+ps
 
+        # ANALYZE
+
         if header["rt"] == RECORD_NODE_ADDED:
-            # build node added for stats and seektable
             hh = dict()
             hh.update(header) 
             hh["poffset"] = po
-
+            # build node added for stats and seektable
             hd = parseadded(file,header) # parse
             self.stats[header["nid"]].assignnodeadded(hh,hd)
 
@@ -480,6 +511,10 @@ class Writer:
             self.stats[header["nid"]].removeemitted = True
         elif header["rt"] == RECORD_END:
             self.endemitted = True
+        elif header["rt"] == RECORD_NEW_DATA:
+            q = self.stats[header["nid"]]
+            hh = parsedatahead(file,header) # parse
+            q.addframe(header,hh,self.file)
     def addframe(self,nid,frameid,timestamp,content):
         if nid > self.mid:
             self.mid = nid
@@ -500,7 +535,7 @@ class Writer:
             if q.headerblock["nid"] == nid and not q.emitted:
                 print "writingseektable",q
                 q.writeseek(self.file) # APPENDED
-    def finalize(self):              
+    def finalize(self):          
         if not self.endemitted:
             writeend(self.file)       # APPENDED TWICE
             self.endemitted = True
@@ -524,6 +559,9 @@ class Writer:
         # patch the head
         self.h0["maxnid"]   = self.mid
         self.h0["ts"] = max([q.maxts for q in self.stats.values()])
+        if self.h0["ts"] is None:
+            self.h0["ts"] = 0
+            print "WARNING issue with stats",self.stats
         writehead1(self.file,self.h0)       
 
 #                    writehead(b,hc)
