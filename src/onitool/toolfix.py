@@ -13,8 +13,6 @@ def fixnite(args,action,a,b):
     if args.registered != -1:
         neededprop["RegistrationType"] = args.registered
         #XN_STREAM_PROPERTY_REGISTRATION_TYPE = 0x10801005, // "RegistrationType"
-    # Check DepthStream.hpp 
-    # Not patched above
     while True:
         h = r.next()
         if h is None:
@@ -29,9 +27,17 @@ def fixnite(args,action,a,b):
                     if k == "ZPPS" or k == "LDDIS":
                         oni.addprop(b,ctargetnid,k,oni.RECORD_REAL_PROPERTY,v)                        
                     elif k == "S2D":
-                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,tables.S2D().tostring())
+                        n = tables.S2D().tostring()
+                        if len(n) != 4096:
+                            print "ERROR! in S2D"
+                            sys.exit(0)
+                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
                     elif k == "D2S":
-                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,tables.D2S().tostring())
+                        n = tables.D2S().tostring()
+                        if len(n) != 20002:
+                            print "ERROR! in S2D"
+                            sys.exit(0)
+                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
                     else:
                         oni.addprop(b,ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
             #XN_STREAM_PROPERTY_S2D_TABLE S2D GENERAL 4096

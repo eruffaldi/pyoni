@@ -222,7 +222,8 @@ def parseprop(a,h):
             data = struct.unpack("q",data)[0]
         else:
             data = struct.unpack("i",data)[0]
-    elif h["rt"] == RECORD_REAL_PROPERTY:    
+    elif h["rt"] == RECORD_REAL_PROPERTY:  
+        #print "realprop",h,datalen
         if len(data) == 8:
             data = struct.unpack("d",data)[0]
         else:
@@ -235,7 +236,7 @@ def addprop(a,nid,name,type,value):
         writehead(a,dict(rt=type,nid=nid,ps=0,fs=HEADER_SIZE+len(c),undopos=0))
         a.write(c)
     elif type == RECORD_GENERAL_PROPERTY:
-        c = makestr(name) + struct.pack("=i",4+4) + value
+        c = makestr(name) + struct.pack("=i",4+len(value)) + value
         writehead(a,dict(rt=type,nid=nid,ps=0,fs=HEADER_SIZE+len(c),undopos=0))
         a.write(c)        
     elif type == RECORD_REAL_PROPERTY:      
