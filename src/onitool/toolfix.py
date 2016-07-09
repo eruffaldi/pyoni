@@ -13,6 +13,7 @@ def fixnite(args,action,a,b):
     if args.registered != -1:
         neededprop["RegistrationType"] = args.registered
         #XN_STREAM_PROPERTY_REGISTRATION_TYPE = 0x10801005, // "RegistrationType"
+    print "fixing props",neededprop
     while True:
         h = r.next()
         if h is None:
@@ -62,7 +63,7 @@ def fixnite(args,action,a,b):
                 print "found depth",ctargetnid
             w.copyblock(h,a)
         elif h["rt"] == oni.RECORD_SEEK_TABLE:
-            w.emitseek(h["nid"],a,h)
+            w.emitseek(h["nid"]) # we are changing props
         else:
             w.copyblock(h,a)
     w.finalize()
@@ -75,6 +76,7 @@ def makeregistered(args,action,a,b):
     emitted = False
     foundprop = set()
     neededprop = {}
+    already = False
     neededprop["RegistrationType"] = 2 # default
     if args.registered != -1:
         neededprop["RegistrationType"] = args.registered
@@ -96,6 +98,7 @@ def makeregistered(args,action,a,b):
             if p["name"] == "RegistrationType":
                 print "replacing existing RegistrationType ",p["data"], " with ",neededprop["RegistrationType"]
                 w.addprop(ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,neededprop["RegistrationType"],datalen=p["datalen"])
+                already = True
             else:
                 w.copyblock(h,a)
             foundprop.add(p["name"])
@@ -106,7 +109,10 @@ def makeregistered(args,action,a,b):
                 print "found depth",ctargetnid
             w.copyblock(h,a)
         elif h["rt"] == oni.RECORD_SEEK_TABLE:
-            w.emitseek(h["nid"],a,h)
+            if already: # needed for compare
+                w.emitseek(h["nid"],a,h)
+            else:
+                w.emitseek(h["nid"])
         else:
             w.copyblock(h,a)
     w.finalize()

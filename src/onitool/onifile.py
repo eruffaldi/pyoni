@@ -534,7 +534,7 @@ class Writer:
         elif rt == RECORD_NEW_DATA:
             q = self.stats[header["nid"]]
             dataheader = parsedatahead(file,header) # parse
-            q.addframe(preoffset,dataheader,self.file,self.configid)
+            q.addframe(preoffset,dataheader,self.file,0) ##BETTER 0 THAN INCORRECT self.configid)
     def addframe(self,nid,frameid,timestamp,content):
         if nid > self.mid:
             self.mid = nid
@@ -550,7 +550,7 @@ class Writer:
 
         # add for seektable, add frame
         q = self.stats[h["nid"]]
-        q.addframe(preoffset,dataheader,self.file,self.configid)
+        q.addframe(preoffset,dataheader,self.file,0) #BETTER 0 THAN INCORRECT self.configid)
     def emitseek(self,nid,ofile=None,hofile=None):
         for k,q in self.stats.iteritems():
             if q.headerblock["nid"] == nid and not q.emitted:

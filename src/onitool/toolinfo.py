@@ -76,6 +76,7 @@ def checkregistered(args,a):
     last = None
     # scan all and keep pre and last
     mid = -1
+    found = False
     while True:
         h = r.next()
         pt = a.tell()
@@ -90,8 +91,12 @@ def checkregistered(args,a):
         elif h["rt"] == oni.RECORD_INT_PROPERTY:
             q = oni.parseprop(a,h)
             if q["name"] == "RegistrationType":
-                print q,h,h["poffset"]+2+len(RegistrationType)+4 # namelen[2] name[namelen] datalen[4] data[]
+                print q["data"]
+                #print q,h,h["poffset"]+2+len("RegistrationType")+4 # namelen[2] name[namelen] datalen[4] data[]
+                found = True
                 break
+    if not found:
+        print "RegistrationType MISSING"
 
 def dump(args,a):
     r = oni.Reader(a)
