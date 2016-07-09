@@ -6,10 +6,17 @@ from collections import defaultdict
 def fixnite(args,action,a,b):
     r = oni.Reader(a)
     w = oni.Writer(b,r.h0)
+    if args.noseek:
+        w.noseek = True
     ctargetnid = None
+    ctargetnid2 = None
     emitted = False
+    emitted2 = False
     foundprop = set()
+    foundprop2 = set()
     neededprop = device.niteprops()
+    neededprop.update(dict(IsFrameBased=1,IsPixelBased=1,IsStream=1,FrameSync=1,xnIsGenerating=1))
+    neededprop2 = dict(IsFrameBased=1,IsPixelBased=1,IsStream=1,FrameSync=0,xnIsGenerating=1)
     if args.registered != -1:
         neededprop["RegistrationType"] = args.registered
         #XN_STREAM_PROPERTY_REGISTRATION_TYPE = 0x10801005, // "RegistrationType"
@@ -44,6 +51,17 @@ def fixnite(args,action,a,b):
             #XN_STREAM_PROPERTY_S2D_TABLE S2D GENERAL 4096
             #XN_STREAM_PROPERTY_D2S_TABLE D2S GENERAL 20002
             emitted = True
+        if ctargetnid2 is not None and h["nid"] != ctargetnid2 and not emitted2:
+            # inject ParamCoeff = 4 for depth
+            for k,v in neededprop2.iteritems():
+                if k in foundprop2:
+                    print "already present",k
+                else:
+                    print "adding property",k
+                    w.addprop(ctargetnid2,k,oni.RECORD_INT_PROPERTY,v)
+            #XN_STREAM_PROPERTY_S2D_TABLE S2D GENERAL 4096
+            #XN_STREAM_PROPERTY_D2S_TABLE D2S GENERAL 20002
+            emitted2 = True        
         if ctargetnid == h["nid"] and h["rt"] == oni.RECORD_INT_PROPERTY:
             p = oni.parseprop(a,h)
             if args.registered != -1 and p["name"] == "RegistrationType":
@@ -56,11 +74,18 @@ def fixnite(args,action,a,b):
             p = oni.parseprop(a,h)
             foundprop.add(p["name"])
             w.copyblock(h,a)
+        elif ctargetnid2 == h["nid"] and h["rt"] == oni.RECORD_INT_PROPERTY:
+            p = oni.parseprop(a,h)
+            foundprop2.add(p["name"])
+            w.copyblock(h,a)
         elif h["rt"] == oni.RECORD_NODE_ADDED:
             hh = oni.parseadded(a,h)
             if hh["nodetype"] == oni.NODE_TYPE_DEPTH:
                 ctargetnid = h["nid"]
                 print "found depth",ctargetnid
+            elif hh["nodetype"] == oni.NODE_TYPE_IMAGE:
+                ctargetnid2 = h["nid"]
+                print "found color",ctargetnid2
             w.copyblock(h,a)
         elif h["rt"] == oni.RECORD_SEEK_TABLE:
             w.emitseek(h["nid"]) # we are changing props
@@ -72,6 +97,8 @@ def fixnite(args,action,a,b):
 def makeregistered(args,action,a,b):
     r = oni.Reader(a)
     w = oni.Writer(b,r.h0)
+    if args.noseek:
+        w.noseek = True
     ctargetnid = None
     emitted = False
     foundprop = set()

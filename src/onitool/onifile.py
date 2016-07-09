@@ -392,24 +392,27 @@ class StreamInfo:
             if t < self.mints:
                 self.mints = t
         self.newtimestamp = t
-    def writeseek(self,a):
+    def writeseek(self,a,noseek):
         self.emitted = True
         q = self 
         off = a.tell()  #!!
-        q.headerseek = dict(rt=RECORD_SEEK_TABLE,
-            ps=len(self.framesoffset)*20, #QiQ
-            fs=HEADER_SIZE, # standard
-            nid=self.headerblock["nid"],
-            undopos=0)
-        q.headerdata["maxts"] = q.maxts is not None and  q.maxts or 0
-        q.headerdata["mints"] = q.mints is not None and  q.mints or 0 
-        q.headerdata["frames"] = q.newframes
-        if len(self.framesoffset) > 1: # skip 0
-            q.headerdata["seektable"] = off 
-            writehead(a,self.headerseek)
-            # then the rest and we already now size and everything
-            for t in self.framesoffset:
-                a.write(makeindexentry(t))
+        if not noseek:
+            q.headerseek = dict(rt=RECORD_SEEK_TABLE,
+                ps=len(self.framesoffset)*20, #QiQ
+                fs=HEADER_SIZE, # standard
+                nid=self.headerblock["nid"],
+                undopos=0)
+            q.headerdata["maxts"] = q.maxts is not None and  q.maxts or 0
+            q.headerdata["mints"] = q.mints is not None and  q.mints or 0 
+            q.headerdata["frames"] = q.newframes
+            if len(self.framesoffset) > 1: # skip 0
+                q.headerdata["seektable"] = off 
+                writehead(a,self.headerseek)
+                # then the rest and we already now size and everything
+                for t in self.framesoffset:
+                    a.write(makeindexentry(t))
+            else:
+                q.headerdata["seektable"] = 0
         else:
             q.headerdata["seektable"] = 0
     def fixnodeadded(self,a):
@@ -472,7 +475,7 @@ class Patcher(Reader):
         for q in self.stats.values():
             #print "writing",q
             q.patchframeheader(self.file)
-            q.writeseek(self.file)
+            q.writeseek(self.file,False)
         self.h0["ts"] = max([q.maxts for q in self.stats.values()])
         writehead1(self.file,self.h0)                           
         writeend(self.file)                    
@@ -482,6 +485,7 @@ class Writer:
         self.file = file
         self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
         self.mid = -1
+        self.noseek = False
         self.configid = 0
         if h0 is None:
             self.h0 = emptyhead1()
@@ -534,7 +538,7 @@ class Writer:
         elif rt == RECORD_NEW_DATA:
             q = self.stats[header["nid"]]
             dataheader = parsedatahead(file,header) # parse
-            q.addframe(preoffset,dataheader,self.file,0) ##BETTER 0 THAN INCORRECT self.configid)
+            q.addframe(preoffset,dataheader,self.file,self.configid)
     def addframe(self,nid,frameid,timestamp,content):
         if nid > self.mid:
             self.mid = nid
@@ -550,7 +554,7 @@ class Writer:
 
         # add for seektable, add frame
         q = self.stats[h["nid"]]
-        q.addframe(preoffset,dataheader,self.file,0) #BETTER 0 THAN INCORRECT self.configid)
+        q.addframe(preoffset,dataheader,self.file,self.configid)
     def emitseek(self,nid,ofile=None,hofile=None):
         for k,q in self.stats.iteritems():
             if q.headerblock["nid"] == nid and not q.emitted:
@@ -564,7 +568,7 @@ class Writer:
                         q.framesoffset[i] = (o[0],configid,o[2])
                     q.framesoffset[0] = (0,0,0)
                 #print "writingseektable",q
-                q.writeseek(self.file) # APPENDED
+                q.writeseek(self.file,self.noseek) # APPENDED
     def finalize(self):          
         if not self.endemitted:
             writeend(self.file)       # APPENDED TWICE
@@ -581,7 +585,7 @@ class Writer:
                     #record.SetNodeID(recordedNodeInfo.nNodeID);
                     #record.SetUndoRecordPos(recordedNodeInfo.nNodeAddedPos);                    
                     pass
-                q.writeseek(self.file) # APPENDED
+                q.writeseek(self.file,self.noseek) # APPENDED
         # patch
         for q in self.stats.values():
             q.fixnodeadded(self.file) # seeks to location

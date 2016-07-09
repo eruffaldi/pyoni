@@ -24,7 +24,7 @@ def seeks(args,a):
         if h["rt"] == oni.RECORD_SEEK_TABLE:
             q = oni.parseseek(a,h)
             for qq in q["data"]:
-                print qq
+                print h["nid"],qq
 
 def times(args,a):
     """prints times info"""

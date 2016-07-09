@@ -65,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
     parser.add_argument('--stripcolor',action="store_true")
     parser.add_argument('--stripdepth',action="store_true")
+    parser.add_argument('--noseek',action="store_true",help="disable seek")
     parser.add_argument('--compare',help="compare another file")
     parser.add_argument('--extractframes',type=str,help="extract frames from the given file, requires,")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
