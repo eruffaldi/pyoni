@@ -65,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument('--dupframes',type=int,default=None,help="duplicate frames")
     parser.add_argument('--stripcolor',action="store_true")
     parser.add_argument('--stripdepth',action="store_true")
+    parser.add_argument('--compare',help="compare another file")
     parser.add_argument('--extractframes',type=str,help="extract frames from the given file, requires,")
     parser.add_argument('--stripir',action="store_true",help="removes IR")
     parser.add_argument('--no-registersynctime',dest="registersynctime",action="store_false",help="no sync times while registering")
@@ -259,6 +260,12 @@ if __name__ == "__main__":
             sys.exit(-1)
         action = "info"
 
+    if args.compare is not None:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        action = "compare"
+
     if args.dupframes:
         if action != "":
             print "Already specified action",action
@@ -327,6 +334,8 @@ if __name__ == "__main__":
         toolfix.fix(args,action,a)
     elif action == "fixnite":
         toolfix.fixnite(args,action,a,b)
+    elif action == "compare":
+        toolinfo.compare(args,action,a,open(args.compare,"rb"))
     elif action == "makeregistered":
         toolfix.makeregistered(args,action,a,b)
         #args.registered = 2

@@ -148,25 +148,27 @@ def makeindexentry(a):
     else:
         return struct.pack("=QiQ",a["timestamp"],a["config"],a["offset"])
 
-def writeseek(a,h):
-    #print "writeseek",len(h["data"])
-    a.seek(h["poffset"],0)
-    for x in h["data"]:
-        y = makeindexentry(x)
-        a.write(y)
+#def writeseek(a,h):
+#emitCommonHeader(RECORD_SEEK_TABLE, nodeId, /*undoRecordPos*/ 0);
+#empty entry for frame 0
+#DataIndexEntry emptyEntry; all zero
+#
+#payloadSize = total entries
+#    a.seek(h["poffset"]+h["fs"],0)
+#    for x in h["data"]:
+#        y = makeindexentry(x)
+#        a.write(y)
 
 def parseindexentry(a):
     """decodes the DataIndexEntry made of a timestamp, config and offset as dictionary"""
-    ts = parseint64(a)
-    cid = parseint(a)
-    pos = parseint64(a)
+    ts,cid,pos = struct.unpack("=QiQ",a.read(20))
     return dict(timestamp=ts,config=cid,offset=pos)
 
 def parseseek(a,h):
-    a.seek(h["poffset"],0)
+    a.seek(h["poffset"]+h["fs"]-HEADER_SIZE,0)
     #print "seek",h["fs"]
     r = []
-    n = h["ps"]/(8+8+4)
+    n = h["ps"]/20
     #print "reading seektable",n
     for i in range(0,n):
         t = parseindexentry(a)
@@ -296,7 +298,8 @@ def copyblock(a,h,b,frame=None,timestamp=None):
     a.seek(h["poffset"],0)
     hout = dict(rt=h["rt"],nid=h["nid"],fs=h["fs"],ps=h["ps"],undopos=h["undopos"],poffset=0,hoffset=b.tell(),nextheader=0)
     writehead(b,hout)
-    if h["fs"] > 5*4+8:
+    if h["fs"] > HEADER_SIZE:
+        # adjust time
         if h["rt"] == RECORD_NEW_DATA and frame is not None:
             # skip real time 
             oldts =    parseint64(a)
@@ -305,16 +308,15 @@ def copyblock(a,h,b,frame=None,timestamp=None):
             b.write(struct.pack("=qi",timestamp,frame))
         else:
             #print "extra",h
-            b.write(a.read(h["fs"]-(5*4+8)))
+            b.write(a.read(h["fs"]-HEADER_SIZE))
 
-    n = 0
-    while n < h["ps"]:
-        no = h["ps"]-n
-        if no > 64*1024:
-            no = 64*1024
-        d = a.read(no)
-        b.write(d)
-        n += no
+    done = 0
+    while done < h["ps"]:
+        left = h["ps"]-done
+        if left > 64*1024:
+            left = 64*1024
+        b.write(a.read(left))
+        done += left
     hout["poffset"] = b.tell()
     hout["nextheader"] = hout["hoffset"] + hout["fs"] + hout["ps"]
     return hout
@@ -375,11 +377,10 @@ class StreamInfo:
     def assignnodeadded(self,h,hh):
         self.headerblock = h
         self.headerdata = hh
-    def addframe(self,h,hh,file):
-        off = file.tell()
-        t = hh["timestamp"]
-        self.newtime(t)
-        self.framesoffset.append((t,self.configid,off))
+    def addframe(self,preoffset,dataheader,file,configid):
+        ts = dataheader["timestamp"]
+        self.newtime(ts)
+        self.framesoffset.append((ts,configid,preoffset))
         self.newframes += 1
     def newtime(self,t):
         if self.maxts is None:
@@ -396,8 +397,8 @@ class StreamInfo:
         q = self 
         off = a.tell()  #!!
         q.headerseek = dict(rt=RECORD_SEEK_TABLE,
-            ps=len(self.framesoffset)*20, #qiq
-            fs=28, # standard
+            ps=len(self.framesoffset)*20, #QiQ
+            fs=HEADER_SIZE, # standard
             nid=self.headerblock["nid"],
             undopos=0)
         q.headerdata["maxts"] = q.maxts is not None and  q.maxts or 0
@@ -406,6 +407,7 @@ class StreamInfo:
         if len(self.framesoffset) > 1: # skip 0
             q.headerdata["seektable"] = off 
             writehead(a,self.headerseek)
+            # then the rest and we already now size and everything
             for t in self.framesoffset:
                 a.write(makeindexentry(t))
         else:
@@ -480,6 +482,7 @@ class Writer:
         self.file = file
         self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
         self.mid = -1
+        self.configid = 0
         if h0 is None:
             self.h0 = emptyhead1()
         else:
@@ -487,23 +490,33 @@ class Writer:
             self.h0.update(h0)
         writehead1(self.file,self.h0)
         self.endemitted = False
+    # adds a property via header and content
+    # increment configid as any new property
     def addproperty(self,header,content):
         writehead(self.file,header) 
         header["poffset"] = self.file.tell()       
         writeprop(self.file,header,content)
+        self.configid += 1
+    # adds a property via target,name,type and value
+    # increment configid as any new property
+    def addprop(self,nid,name,type,value,datalen=0):
+        addprop(self.file,nid,name,type,value,datalen)
+        self.configid += 1
+    # copy a block from one to another, if it is a property increment the config consequently
     def copyblock(self,header,file):
         if header["nid"] > self.mid:
             self.mid = header["nid"]
         file.seek(header["poffset"]) # got to data
         d = file.read(header["ps"]+header["fs"]-HEADER_SIZE) # ps + fs !
 
+        preoffset = self.file.tell()
         writehead(self.file,header) # same header 
         po = self.file.tell() # save output location
         self.file.write(d) # content fs+ps
 
         # ANALYZE
-
-        if header["rt"] == RECORD_NODE_ADDED:
+        rt = header["rt"]
+        if rt == RECORD_NODE_ADDED:
             hh = dict()
             hh.update(header) 
             hh["poffset"] = po
@@ -512,32 +525,44 @@ class Writer:
             self.stats[header["nid"]].assignnodeadded(hh,hd)
 
             #print "adding RECORD_NODE_ADDED to output",hh,hd
-        elif header["rt"] == RECORD_NODE_REMOVED:
+        elif rt == RECORD_INT_PROPERTY or rt == RECORD_REAL_PROPERTY or rt == RECORD_GENERAL_PROPERTY:
+            self.configid += 1
+        elif rt == RECORD_NODE_REMOVED:
             self.stats[header["nid"]].removeemitted = True
-        elif header["rt"] == RECORD_END:
+        elif rt == RECORD_END:
             self.endemitted = True
-        elif header["rt"] == RECORD_NEW_DATA:
+        elif rt == RECORD_NEW_DATA:
             q = self.stats[header["nid"]]
-            hh = parsedatahead(file,header) # parse
-            q.addframe(header,hh,self.file)
+            dataheader = parsedatahead(file,header) # parse
+            q.addframe(preoffset,dataheader,self.file,self.configid)
     def addframe(self,nid,frameid,timestamp,content):
         if nid > self.mid:
             self.mid = nid
         # basehead is 5*4=20 + 8 pos = 28
         # extra data (frame and timestamp)=12
         h = dict(rt=RECORD_NEW_DATA,nid=nid,fs=28+12,ps=len(content),undopos=0)
+        preoffset = self.file.tell()
         writehead(self.file,h)         
         h["poffset"] = self.file.tell()     # for the seektable 
-        hh = dict(frameid=frameid,timestamp=timestamp) # fs
+        dataheader = dict(frameid=frameid,timestamp=timestamp) # fs
         writedatahead(self.file,h,hh) # fs content write
         self.file.write(content) # ps
 
         # add for seektable, add frame
         q = self.stats[h["nid"]]
-        q.addframe(h,hh,self.file)
-    def emitseek(self,nid):
-        for q in self.stats.values():
+        q.addframe(preoffset,dataheader,self.file,self.configid)
+    def emitseek(self,nid,ofile=None,hofile=None):
+        for k,q in self.stats.iteritems():
             if q.headerblock["nid"] == nid and not q.emitted:
+                if ofile is not None:
+                    # we are using an existing file so copy the config id 
+                    pp = parseseek(ofile,hofile)
+                    configid = pp["data"][1]["config"]
+                    print "newconfigid",configid
+                    self.configid = configid
+                    for i,o in enumerate(q.framesoffset):
+                        q.framesoffset[i] = (o[0],configid,o[2])
+                    q.framesoffset[0] = (0,0,0)
                 #print "writingseektable",q
                 q.writeseek(self.file) # APPENDED
     def finalize(self):          

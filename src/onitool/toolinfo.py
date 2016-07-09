@@ -1,5 +1,6 @@
 from . import onifile as oni
 import struct
+import binascii
 
 def info(args,a):
     r = oni.Reader(a)
@@ -36,6 +37,40 @@ def times(args,a):
             hh = oni.parsedatahead(a,h)
             print h["nid"],hh["frameid"],hh["timestamp"]
 
+def compare(args,action,a,b):
+    ra = oni.Reader(a)
+    rb = oni.Reader(b)
+    while True:
+        ha = ra.next()
+        hb = rb.next()
+        if ha != hb:
+            print "mismatch in header a=",ha,"b=",hb
+        elif ha is None:
+            print "ended",ha,hb
+            break
+        # content
+        a.seek(ha["poffset"])
+        da = a.read(ha["fs"]-oni.HEADER_SIZE)
+        b.seek(hb["poffset"])
+        db = b.read(hb["fs"]-oni.HEADER_SIZE)
+        if da != db:
+            print "mismatch in header extra a=",ha,"b=",hb,len(da),len(db)
+        else:
+            a.seek(ha["poffset"]+ha["fs"])
+            da = a.read(ha["ps"])
+            b.seek(ha["poffset"]+ha["fs"])
+            db = b.read(ha["ps"])
+            if da != db:
+                print "mismatch in payload a=",ha,"b=",hb,len(da),len(db)
+                if ha["rt"] == oni.RECORD_SEEK_TABLE:
+                    oni.parseseek(a,ha)
+                    oni.parseseek(b,hb)
+                    print "firstseek","\n\t".join([str(x) for x in ha["data"][0:10]])
+                    print "secondseek","\n\t".join([str(x) for x in hb["data"][0:10]])
+                    #print seek tables
+            #print binascii.hexlify(da)
+            #print binascii.hexlify(db)
+
 def checkregistered(args,a):
     r = oni.Reader(a)
     last = None
@@ -55,7 +90,7 @@ def checkregistered(args,a):
         elif h["rt"] == oni.RECORD_INT_PROPERTY:
             q = oni.parseprop(a,h)
             if q["name"] == "RegistrationType":
-                print q
+                print q,h,h["poffset"]+2+len(RegistrationType)+4 # namelen[2] name[namelen] datalen[4] data[]
                 break
 
 def dump(args,a):

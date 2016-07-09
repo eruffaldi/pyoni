@@ -25,21 +25,21 @@ def fixnite(args,action,a,b):
                 else:
                     print "adding property",k
                     if k == "ZPPS" or k == "LDDIS":
-                        oni.addprop(b,ctargetnid,k,oni.RECORD_REAL_PROPERTY,v)                        
+                        w.addprop(ctargetnid,k,oni.RECORD_REAL_PROPERTY,v)                        
                     elif k == "S2D":
                         n = device.S2D().tostring()
                         if len(n) != 4096: # 
                             print "ERROR! in S2D"
                             sys.exit(0)
-                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
+                        w.addprop(ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
                     elif k == "D2S":
                         n = device.D2S().tostring()
                         if len(n) != 20002:
                             print "ERROR! in S2D"
                             sys.exit(0)
-                        oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
+                        w.addprop(ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
                     else:
-                        oni.addprop(b,ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
+                        w.addprop(ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
             #XN_STREAM_PROPERTY_S2D_TABLE S2D GENERAL 4096
             #XN_STREAM_PROPERTY_D2S_TABLE D2S GENERAL 20002
             emitted = True
@@ -47,7 +47,7 @@ def fixnite(args,action,a,b):
             p = oni.parseprop(a,h)
             if args.registered != -1 and p["name"] == "RegistrationType":
                 print "replacing existing RegistrationType"
-                oni.addprop(b,ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,args.registered)                            
+                w.addprop(ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,args.registered)                            
             else:
                 w.copyblock(h,a)
             foundprop.add(p["name"])
@@ -62,7 +62,7 @@ def fixnite(args,action,a,b):
                 print "found depth",ctargetnid
             w.copyblock(h,a)
         elif h["rt"] == oni.RECORD_SEEK_TABLE:
-            w.emitseek(h["nid"])
+            w.emitseek(h["nid"],a,h)
         else:
             w.copyblock(h,a)
     w.finalize()
@@ -89,13 +89,13 @@ def makeregistered(args,action,a,b):
                     print "already present",k
                 else:
                     print "adding property",k,"as",neededprop["RegistrationType"]
-                    oni.addprop(b,ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
+                    w.addprop(ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
             emitted = True
         if ctargetnid == h["nid"] and h["rt"] == oni.RECORD_INT_PROPERTY:
             p = oni.parseprop(a,h)
             if p["name"] == "RegistrationType":
                 print "replacing existing RegistrationType ",p["data"], " with ",neededprop["RegistrationType"]
-                oni.addprop(b,ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,neededprop["RegistrationType"],datalen=p["datalen"])
+                w.addprop(ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,neededprop["RegistrationType"],datalen=p["datalen"])
             else:
                 w.copyblock(h,a)
             foundprop.add(p["name"])
@@ -106,7 +106,7 @@ def makeregistered(args,action,a,b):
                 print "found depth",ctargetnid
             w.copyblock(h,a)
         elif h["rt"] == oni.RECORD_SEEK_TABLE:
-            w.emitseek(h["nid"])
+            w.emitseek(h["nid"],a,h)
         else:
             w.copyblock(h,a)
     w.finalize()
