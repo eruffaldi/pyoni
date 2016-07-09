@@ -1,5 +1,5 @@
 from . import onifile as oni
-from . import D2S as tables
+import kinect1 as device
 import struct
 from collections import defaultdict
 
@@ -9,7 +9,7 @@ def fixnite(args,action,a,b):
     ctargetnid = None
     emitted = False
     foundprop = set()
-    neededprop = dict(ParamCoeff=4,RegistrationType=0,ConstShift=200,ShiftScale=10,MaxShift=2047,ZPD=120,ZPPS=0.10520000010728836,D2S="",S2D="",LDDIS=7.5,Gain=42,MaxDepthValue=10000)
+    neededprop = device.niteprops()
     if args.registered != -1:
         neededprop["RegistrationType"] = args.registered
         #XN_STREAM_PROPERTY_REGISTRATION_TYPE = 0x10801005, // "RegistrationType"
@@ -27,13 +27,13 @@ def fixnite(args,action,a,b):
                     if k == "ZPPS" or k == "LDDIS":
                         oni.addprop(b,ctargetnid,k,oni.RECORD_REAL_PROPERTY,v)                        
                     elif k == "S2D":
-                        n = tables.S2D().tostring()
-                        if len(n) != 4096:
+                        n = device.S2D().tostring()
+                        if len(n) != 4096: # 
                             print "ERROR! in S2D"
                             sys.exit(0)
                         oni.addprop(b,ctargetnid,k,oni.RECORD_GENERAL_PROPERTY,n)
                     elif k == "D2S":
-                        n = tables.D2S().tostring()
+                        n = device.D2S().tostring()
                         if len(n) != 20002:
                             print "ERROR! in S2D"
                             sys.exit(0)
@@ -45,11 +45,61 @@ def fixnite(args,action,a,b):
             emitted = True
         if ctargetnid == h["nid"] and h["rt"] == oni.RECORD_INT_PROPERTY:
             p = oni.parseprop(a,h)
+            if args.registered != -1 and p["name"] == "RegistrationType":
+                print "replacing existing RegistrationType"
+                oni.addprop(b,ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,args.registered)                            
+            else:
+                w.copyblock(h,a)
             foundprop.add(p["name"])
         elif ctargetnid == h["nid"] and h["rt"] == oni.RECORD_GENERAL_PROPERTY:
             p = oni.parseprop(a,h)
             foundprop.add(p["name"])
-        if h["rt"] == oni.RECORD_NODE_ADDED:
+            w.copyblock(h,a)
+        elif h["rt"] == oni.RECORD_NODE_ADDED:
+            hh = oni.parseadded(a,h)
+            if hh["nodetype"] == oni.NODE_TYPE_DEPTH:
+                ctargetnid = h["nid"]
+                print "found depth",ctargetnid
+            w.copyblock(h,a)
+        elif h["rt"] == oni.RECORD_SEEK_TABLE:
+            w.emitseek(h["nid"])
+        else:
+            w.copyblock(h,a)
+    w.finalize()
+
+
+def makeregistered(args,action,a,b):
+    r = oni.Reader(a)
+    w = oni.Writer(b,r.h0)
+    ctargetnid = None
+    emitted = False
+    foundprop = set()
+    neededprop = {}
+    neededprop["RegistrationType"] = 2 # default
+    if args.registered != -1:
+        neededprop["RegistrationType"] = args.registered
+    while True:
+        h = r.next()
+        if h is None:
+            break
+        if ctargetnid is not None and h["nid"] != ctargetnid and not emitted:
+            # inject ParamCoeff = 4 for depth
+            for k,v in neededprop.iteritems():
+                if k in foundprop:
+                    print "already present",k
+                else:
+                    print "adding property",k,"as",neededprop["RegistrationType"]
+                    oni.addprop(b,ctargetnid,k,oni.RECORD_INT_PROPERTY,v)
+            emitted = True
+        if ctargetnid == h["nid"] and h["rt"] == oni.RECORD_INT_PROPERTY:
+            p = oni.parseprop(a,h)
+            if p["name"] == "RegistrationType":
+                print "replacing existing RegistrationType ",p["data"], " with ",neededprop["RegistrationType"]
+                oni.addprop(b,ctargetnid,p["name"],oni.RECORD_INT_PROPERTY,neededprop["RegistrationType"],datalen=p["datalen"])
+            else:
+                w.copyblock(h,a)
+            foundprop.add(p["name"])
+        elif h["rt"] == oni.RECORD_NODE_ADDED:
             hh = oni.parseadded(a,h)
             if hh["nodetype"] == oni.NODE_TYPE_DEPTH:
                 ctargetnid = h["nid"]

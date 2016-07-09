@@ -36,6 +36,28 @@ def times(args,a):
             hh = oni.parsedatahead(a,h)
             print h["nid"],hh["frameid"],hh["timestamp"]
 
+def checkregistered(args,a):
+    r = oni.Reader(a)
+    last = None
+    # scan all and keep pre and last
+    mid = -1
+    while True:
+        h = r.next()
+        pt = a.tell()
+        if h is None:
+            break
+        prelast = last
+        last = h
+        if mid < h["nid"]:
+            mid = h["nid"]
+        elif h["rt"] == oni.RECORD_NODE_DATA_BEGIN:
+            break
+        elif h["rt"] == oni.RECORD_INT_PROPERTY:
+            q = oni.parseprop(a,h)
+            if q["name"] == "RegistrationType":
+                print q
+                break
+
 def dump(args,a):
     r = oni.Reader(a)
     last = None
@@ -56,11 +78,12 @@ def dump(args,a):
         elif h["rt"] == oni.RECORD_NODE_DATA_BEGIN:
             print "nodebegin",h["nid"],h
         elif h["rt"] == oni.RECORD_NODE_ADDED:
-            print "nodeadded",h["nid"],h,oni.parseadded(a,h)
+            print "nodeadded",h["nid"],h
+            print "\tnodeadded-details",oni.parseadded(a,h)
         elif h["rt"] == oni.RECORD_INT_PROPERTY:
-            print "intprop",h["nid"],oni.parseprop(a,h)
+            print "intprop",h["nid"],oni.parseprop(a,h),h["poffset"],h["fs"]
         elif h["rt"] == oni.RECORD_REAL_PROPERTY:
-            print "realprop",h["nid"],oni.parseprop(a,h)
+            print "realprop",h["nid"],oni.parseprop(a,h),h["poffset"],h["fs"]
         elif h["rt"] == oni.RECORD_GENERAL_PROPERTY:
             pp = oni.parseprop(a,h)
             print "genprop",h["nid"],pp

@@ -78,7 +78,9 @@ if __name__ == "__main__":
     parser.add_argument('--fduration',type=int,default=-1,help="duration of extraction in frames")
     parser.add_argument('--skipframes',type=int,default=None,help="skip n frames")
     parser.add_argument('--coloreddepth',action="store_true",help="colored depth")
-    parser.add_argument('--registered',type=int,default=-1,help="registered modified for fixnite or fixregistered")
+    parser.add_argument('--makeregistered',action="store_true",help="fake reg")
+    parser.add_argument('--registered',type=int,default=-1,help="registered modified for fixnite")
+    parser.add_argument('--isregistered',action="store_true",help="check registered")
     parser.add_argument('--output',default=None)
     parser.add_argument('--outputdir')
     #parser.add_argument('--extractboth',help="extract the depth and color stream as png and jpeg respectively. This option specifies the target path, numbering is the frame number")
@@ -151,6 +153,20 @@ if __name__ == "__main__":
         patchaction = True
         action = "fixcut"
 
+    if args.makeregistered:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        if args.output is None:
+            print "FIXNITE requires output"
+            sys.exit(-1)
+        action = "makeregistered"
+
+    if args.isregistered:
+        if action != "":
+            print "Already specified action",action
+            sys.exit(-1)
+        action = "isregistered"
     if args.fixnite :
         if action != "":
             print "Already specified action",action
@@ -289,6 +305,8 @@ if __name__ == "__main__":
         toolreg.register(args,action,a,b)
     elif action == "extract":
         toolext.extract(args,subaction,extractpath,a)        
+    elif action == "isregistered":
+        toolinfo.checkregistered(args,a)
     elif action == "mjpeg":
         toolext.extractmjpeg(args,a,b)        
     elif action == "stripcolor" or action == "stripir" or action == "stripdepth":
@@ -309,6 +327,10 @@ if __name__ == "__main__":
         toolfix.fix(args,action,a)
     elif action == "fixnite":
         toolfix.fixnite(args,action,a,b)
+    elif action == "makeregistered":
+        toolfix.makeregistered(args,action,a,b)
+        #args.registered = 2
+        #toolfix.fixnite(args,action,a,b)
     elif args.times:
         toolinfo.times(args,a)
     elif action == "info":

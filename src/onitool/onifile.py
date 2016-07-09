@@ -149,7 +149,7 @@ def makeindexentry(a):
         return struct.pack("=QiQ",a["timestamp"],a["config"],a["offset"])
 
 def writeseek(a,h):
-    print "writeseek",len(h["data"])
+    #print "writeseek",len(h["data"])
     a.seek(h["poffset"],0)
     for x in h["data"]:
         y = makeindexentry(x)
@@ -164,10 +164,10 @@ def parseindexentry(a):
 
 def parseseek(a,h):
     a.seek(h["poffset"],0)
-    print "seek",h["fs"]
+    #print "seek",h["fs"]
     r = []
     n = h["ps"]/(8+8+4)
-    print "reading seektable",n
+    #print "reading seektable",n
     for i in range(0,n):
         t = parseindexentry(a)
         t["frameid"] = i
@@ -187,7 +187,7 @@ def writedadded(a,h,hh):
     a.write(makestr(hh["name"]))
     #print "codecback",codec2id.get(hh["codec"],hh["codec"])
     ocodec = codec2id.get(hh["codec"],hh["codec"])
-    print h,hh
+    #print h,hh
     a.write(struct.pack("=iiiQQQ",hh["nodetype"],ocodec,hh["frames"],hh["mints"],hh["maxts"],hh["seektable"]))
 def parseadded(a,h):
     a.seek(h["poffset"],0)
@@ -218,21 +218,25 @@ def parseprop(a,h):
     datalen = parseint(a)-4
     data = a.read(datalen)
     if h["rt"] == RECORD_INT_PROPERTY:
-        if len(data) == 8:
+        if datalen == 8:
             data = struct.unpack("q",data)[0]
         else:
             data = struct.unpack("i",data)[0]
     elif h["rt"] == RECORD_REAL_PROPERTY:  
         #print "realprop",h,datalen
-        if len(data) == 8:
+        if datalen == 8:
             data = struct.unpack("d",data)[0]
         else:
             data = struct.unpack("f",data)[0]
-    return dict(name=name,data=data)
+    return dict(name=name,data=data,datalen=datalen)
 
-def addprop(a,nid,name,type,value):
+def addprop(a,nid,name,type,value,datalen=0):
     if type == RECORD_INT_PROPERTY:      
-        c = makestr(name) + struct.pack("=ii",4+4,value)
+        #content after header is:         
+        if datalen == 8:
+            c = makestr(name) + struct.pack("=iq",4+8,value)
+        else:
+            c = makestr(name) + struct.pack("=iii",4+4,value,0) # last 0 is dummy for leaving space?
         writehead(a,dict(rt=type,nid=nid,ps=0,fs=HEADER_SIZE+len(c),undopos=0))
         a.write(c)
     elif type == RECORD_GENERAL_PROPERTY:
@@ -300,7 +304,7 @@ def copyblock(a,h,b,frame=None,timestamp=None):
             # field or payload?
             b.write(struct.pack("=qi",timestamp,frame))
         else:
-            print "extra",h
+            #print "extra",h
             b.write(a.read(h["fs"]-(5*4+8)))
 
     n = 0
@@ -338,10 +342,10 @@ def readrechead(a):
     - undorecord
     """
     p = a.tell()
-    h1 = a.read(4*5+8)
+    h1 = a.read(HEADER_SIZE)
     if h1 == "":
             return None
-    magic,rt,nid,fs,ps,undopos= struct.unpack("=5iq",h1)
+    magic,rt,nid,fs,ps,undopos = struct.unpack("=5iQ",h1)
     if magic != MAGIC:
             print "bad magic record",magic
             return None
@@ -464,7 +468,7 @@ class Patcher(Reader):
         self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
     def finalize(self):
         for q in self.stats.values():
-            print "writing",q
+            #print "writing",q
             q.patchframeheader(self.file)
             q.writeseek(self.file)
         self.h0["ts"] = max([q.maxts for q in self.stats.values()])
@@ -507,7 +511,7 @@ class Writer:
             hd = parseadded(file,header) # parse
             self.stats[header["nid"]].assignnodeadded(hh,hd)
 
-            print "adding RECORD_NODE_ADDED to output",hh,hd
+            #print "adding RECORD_NODE_ADDED to output",hh,hd
         elif header["rt"] == RECORD_NODE_REMOVED:
             self.stats[header["nid"]].removeemitted = True
         elif header["rt"] == RECORD_END:
@@ -534,7 +538,7 @@ class Writer:
     def emitseek(self,nid):
         for q in self.stats.values():
             if q.headerblock["nid"] == nid and not q.emitted:
-                print "writingseektable",q
+                #print "writingseektable",q
                 q.writeseek(self.file) # APPENDED
     def finalize(self):          
         if not self.endemitted:
@@ -544,7 +548,7 @@ class Writer:
         #removed {'rt': 7, 'ps': 0, 'fs': 28, 'poffset': 368218784, 'hoffset': 368218756, 'nid': 2, 'nextheader': 368218784, 'undopos': 1873}
         for q in self.stats.values():
             if not q.emitted:
-                print "writingseektable",q
+                #print "writingseektable",q
                 if not q.removeemitted:
                     #TODO remove this if not emitted
                     #REMOVE is EMPTY

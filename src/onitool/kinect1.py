@@ -1,5 +1,6 @@
 import array
 
+#20002 ?
 def D2S():
     a = array.array("H")
     a.fromlist([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
@@ -1005,6 +1006,9 @@ def D2S():
 1052])
     return a
 
+#low-level depth value to depth_to_rgb
+#zero plane used to compute this
+#+S2D_PIXEL_CONST DEPTH_SENSOR_X_RES DEPTH_X_RES
 def S2D():
     a = array.array("H")
     a.fromlist([0, 315, 315, 315, 316, 316, 316, 316, 317, 317, 
@@ -1213,6 +1217,38 @@ def S2D():
 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
 0, 0, 0, 0, 0, 0, 0, 0])
     return a
+
+##define S2D_PIXEL_CONST 10
+##define S2D_CONST_OFFSET 0.375
+#define DEPTH_SENSOR_X_RES 1280
+#define DEPTH_MIRROR_X 0
+#define DEPTH_X_OFFSET 1
+#define DEPTH_Y_OFFSET 1
+#define DEPTH_X_RES 640
+#define DEPTH_Y_RES 480
+##define REG_X_VAL_SCALE 256 // "fixed-point" precision for double -> int32_t conversion
+#
+#Registration_
+#   reg_index = (y * DEPTH_X_RES + x)  #307200
+#	nx = (registration_table[reg_index][0] + depth)/REG_X_VAL_SCALE
+#	ny = (registration_table[reg_index][1])
+# if outside break
+#	target_index = (ny * DEPTH_X_RES + nx)) - target_offset
+#	current_depth = output_mm[target_index]
+# if	(current_depth == DEPTH_NO_MM_VALUE) || (current_depth > metric_depth)
+#	...
+#
+#Table: depth_to_rgb is for every depth value (0..4096) as 0..255
+def niteprops():
+    return dict(ParamCoeff=4,RegistrationType=0,ConstShift=200,ShiftScale=10,MaxShift=2047,ZPD=120,ZPPS=0.10520000010728836,D2S="",S2D="",LDDIS=7.5,Gain=42,MaxDepthValue=10000)
+
+
+#Real ONI from Windows Differences:
+#LDDIS 0
+#Gain 30
+#ZPPS -3.6893488147419103e+19
+#RegistrationType 2 (!)
+#DCRCDIS 3.6893488147419103e+19
 
 if __name__ == '__main__':
     print len(D2S().tostring())
