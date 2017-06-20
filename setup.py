@@ -13,7 +13,7 @@ moduleany = Extension('anyregistration.libanyregistration', include_dirs=['.','/
 
 setup(
   name = 'pyoni',
-  version = '0.5.2',
+  version = '0.6.1',
   install_requires = ['pypng','pillow'],
   description = 'Python OpenNI ONI tool',
   author = 'Emanuele Ruffaldi',
@@ -24,5 +24,5 @@ setup(
   scripts = ['src/pyonitool.py'],
   packages=find_packages('src'), 
   package_dir = {'':'src'},
-  ext_modules = [modulexndec,moduleany]
+  ext_modules = [moduleany] #removed modulexndec
 )

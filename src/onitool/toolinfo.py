@@ -29,6 +29,7 @@ def seeks(args,a):
 def times(args,a):
     """prints times info"""
     r = oni.Reader(a)
+    print "streamid","frameid","timestamp"
     while True:
         h = r.next()
         if h is None:

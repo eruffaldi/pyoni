@@ -1,6 +1,6 @@
 Metadata-Version: 1.1
 Name: pyoni
-Version: 0.5
+Version: 0.6.1
 Summary: pyoni is a Python tool for manipulating OpenNI data files
 Home-page: https://github.com/eruffaldi/pyoni
 Author: Emanuele Ruffaldi
