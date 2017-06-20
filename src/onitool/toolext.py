@@ -1,9 +1,7 @@
 from . import onifile as oni
 import struct,array,os,sys
-try:
-    from ..xndec import xndec as xndec 
-except:
-    xndec = None
+
+from xndec import xndec as xndec
 try:
     import png
 except:
