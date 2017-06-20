@@ -2,6 +2,10 @@ from distutils.core import setup
 import sys
 from setuptools import  find_packages,Extension
 
+module1 = Extension('demo',
+                    sources = ['demo.c'])
+
+
 is_windows = sys.platform.startswith('win')
 
 if is_windows:
@@ -24,5 +28,5 @@ setup(
   scripts = ['src/pyonitool.py'],
   packages=find_packages('src'), 
   package_dir = {'':'src'},
-  ext_modules = [moduleany] #removed modulexndec
+  ext_modules = [moduleany,modulexndec] #removed modulexndec
 )

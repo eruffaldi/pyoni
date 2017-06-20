@@ -10,7 +10,7 @@ from xndec import xndec as xndec
 try:
     import png
 except:
-    png =None
+    png = None
 
 
 class AsusModel:

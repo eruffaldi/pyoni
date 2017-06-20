@@ -468,8 +468,8 @@ class Reader:
 
 # inplace
 class Patcher(Reader):
-    def __init__(self,file,h0):
-        Reader.__init__(file,h0)
+    def __init__(self,file,h0=None):
+        Reader.__init__(self,file,h0)
         self.stats = defaultdict(StreamInfo) # for file stats and seek table into b
     def finalize(self):
         for q in self.stats.values():
@@ -549,7 +549,7 @@ class Writer:
         writehead(self.file,h)         
         h["poffset"] = self.file.tell()     # for the seektable 
         dataheader = dict(frameid=frameid,timestamp=timestamp) # fs
-        writedatahead(self.file,h,hh) # fs content write
+        writedatahead(self.file,h,dataheader) # fs content write
         self.file.write(content) # ps
 
         # add for seektable, add frame

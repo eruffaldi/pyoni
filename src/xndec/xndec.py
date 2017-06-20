@@ -1,5 +1,3 @@
-
-
 import ctypes,os
 
 # XnStatus XnStreamUncompressDepth16ZWithEmbTable(const XnUInt8* pInput, const XnUInt32 nInputSize, XnUInt16* pOutput, XnUInt32* pnOutputSize)
@@ -11,13 +9,19 @@ types = ["",".so",".dylib",".pyd"]
 x = None
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
-
 for a in types:
 	try:
-		x = ctypes.CDLL(os.path.join(dir_path,"libxndec" + a))
-		break
+		pa = os.path.join(dir_path,"libxndec" + a)
+		#print "looking for",pa
+		x = ctypes.CDLL(pa)
+		if x is not None:
+			#print "found pa",pa
+			break
 	except:
 		pass
+if x is None:
+	raise Exception("Unknown entity")
+
 f = x.XnStreamUncompressDepth16ZWithEmbTable
 et = ctypes.POINTER(ctypes.c_uint8)
 f.argtypes = [ctypes.c_char_p,ctypes.c_int,ctypes.POINTER(ctypes.c_uint16),ctypes.POINTER(ctypes.c_int)]

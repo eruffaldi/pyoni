@@ -141,9 +141,12 @@ def extract(args,action,extractpath,a):
                 foundhh = hh
                 print "!!found matching for ",targetnid,codec
                 if codec == "16zt":
-                    if xndec is None or xndec.doXnStreamUncompressDepth16ZWithEmbTable is None:
+                    if xndec is None:
                         print "xndec is missing cannot decode to png"
                         sys.exit(-1)
+                    if xndec.doXnStreamUncompressDepth16ZWithEmbTable is None:
+                        print "xndec is doXnStreamUncompressDepth16ZWithEmbTable"
+                        sys.exit(-1)                        
                     if png is None:
                         print "pypng is missing"
                         sys.exit(-1)

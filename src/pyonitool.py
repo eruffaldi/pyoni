@@ -38,7 +38,7 @@ try:
     import onitool.toolreg as toolreg
 except:
     toolreg = None
-    print "missing dll for toolreg"
+    print "toolreg not available"
 
 
 def interval(s,t,tt):
